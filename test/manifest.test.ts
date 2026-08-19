@@ -8,6 +8,7 @@ test("uses color branding icon and monochrome activity bar icon", () => {
   const manifest = JSON.parse(readFileSync(path.join(projectRoot, "package.json"), "utf8"));
   const activityBar = manifest.contributes.viewsContainers.activitybar[0];
 
+  assert.equal(manifest.publisher, "MathsionYang");
   assert.equal(manifest.icon, "codexchat-icon-b-terminal.png");
   assert.equal(existsSync(path.join(projectRoot, manifest.icon)), true);
   assert.equal(activityBar.icon, "codexchat-icon-b-line.svg");
