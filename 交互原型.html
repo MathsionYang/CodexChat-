@@ -1,0 +1,1413 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodexChat 交互原型</title>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --shell: light-dark(#f3f3f3, #181818);
+      --chrome: light-dark(#e8e8e8, #202020);
+      --sidebar: light-dark(#f7f7f7, #252526);
+      --editor: light-dark(#ffffff, #1e1e1e);
+      --surface: light-dark(#ffffff, #2b2b2b);
+      --surface-hover: light-dark(#e9e9e9, #333333);
+      --selected: light-dark(#dbeafe, #123a52);
+      --selected-text: light-dark(#12395b, #e5f3ff);
+      --text: light-dark(#202020, #d6d6d6);
+      --muted: light-dark(#626262, #9b9b9b);
+      --border: light-dark(#d2d2d2, #3d3d3d);
+      --focus: #007acc;
+      --focus-hover: #086dad;
+      --success: light-dark(#18794e, #4ec98a);
+      --warning: light-dark(#8a5a00, #e7b84b);
+      --status: light-dark(#007acc, #007acc);
+      --shadow: light-dark(rgb(0 0 0 / 0.18), rgb(0 0 0 / 0.48));
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      background: var(--shell);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    button,
+    input {
+      color: inherit;
+      font: inherit;
+      letter-spacing: 0;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-rows: 35px minmax(620px, calc(100vh - 57px)) 22px;
+      min-height: 677px;
+      overflow: hidden;
+      background: var(--editor);
+    }
+
+    .titlebar {
+      display: grid;
+      grid-template-columns: 150px minmax(240px, 560px) 1fr;
+      align-items: center;
+      gap: 16px;
+      padding: 0 12px;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+    }
+
+    .window-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .title-search {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-width: 0;
+      height: 24px;
+      padding: 0 10px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--surface) 72%, transparent);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+    }
+
+    .title-search span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: 48px 316px minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .activitybar {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      background: var(--chrome);
+      border-right: 1px solid var(--border);
+    }
+
+    .activity-group {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .activity-button {
+      position: relative;
+      display: grid;
+      width: 48px;
+      height: 48px;
+      padding: 0;
+      place-items: center;
+      color: var(--muted);
+      background: transparent;
+      border: 0;
+    }
+
+    .activity-button:hover {
+      color: var(--text);
+    }
+
+    .activity-button.active {
+      color: var(--text);
+    }
+
+    .activity-button.active::before {
+      position: absolute;
+      inset: 7px auto 7px 0;
+      width: 2px;
+      background: var(--focus);
+      content: "";
+    }
+
+    .activity-button .brand-glyph {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .sidebar {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+    }
+
+    .sidebar-header {
+      display: flex;
+      min-height: 42px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 0 10px 0 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-title {
+      overflow: hidden;
+      font-size: 12px;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .icon-button {
+      display: inline-grid;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      place-items: center;
+      background: transparent;
+      border: 0;
+      border-radius: 4px;
+    }
+
+    .icon-button:hover {
+      background: var(--surface-hover);
+    }
+
+    .sidebar-body {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+    }
+
+    .search-wrap {
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .search-box {
+      display: flex;
+      height: 28px;
+      align-items: center;
+      gap: 7px;
+      padding: 0 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--focus);
+    }
+
+    .search-box input {
+      width: 100%;
+      min-width: 0;
+      padding: 0;
+      background: transparent;
+      border: 0;
+      outline: 0;
+    }
+
+    .section-label {
+      padding: 12px 12px 6px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .list-button {
+      display: grid;
+      width: 100%;
+      min-height: 56px;
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      text-align: left;
+      background: transparent;
+      border: 0;
+      border-left: 2px solid transparent;
+    }
+
+    .list-button:hover {
+      background: var(--surface-hover);
+    }
+
+    .list-button.active {
+      color: var(--selected-text);
+      background: var(--selected);
+      border-left-color: var(--focus);
+    }
+
+    .list-icon {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      color: var(--muted);
+    }
+
+    .list-copy {
+      min-width: 0;
+    }
+
+    .list-name {
+      overflow: hidden;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .list-meta {
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .count {
+      min-width: 20px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .project-banner {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .project-banner-top {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .project-banner strong {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-path {
+      margin-top: 5px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .project-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      margin-top: 10px;
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 30px;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 5px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+
+    .button:hover {
+      background: var(--surface-hover);
+    }
+
+    .button.primary {
+      color: #ffffff;
+      background: var(--focus);
+      border-color: var(--focus);
+    }
+
+    .button.primary:hover {
+      background: var(--focus-hover);
+    }
+
+    .button.ghost {
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .button.ghost:hover {
+      background: var(--surface-hover);
+    }
+
+    .editor {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: auto;
+      background: var(--editor);
+    }
+
+    .editor-tabbar {
+      display: flex;
+      height: 35px;
+      align-items: stretch;
+      background: var(--chrome);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .editor-tab {
+      display: flex;
+      min-width: 170px;
+      max-width: 260px;
+      align-items: center;
+      gap: 7px;
+      padding: 0 12px;
+      background: var(--editor);
+      border-right: 1px solid var(--border);
+      border-top: 1px solid var(--focus);
+    }
+
+    .editor-tab span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .editor-content {
+      width: min(840px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 42px 0 72px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 9px;
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .lead {
+      max-width: 640px;
+      margin-bottom: 28px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin: 24px 0 32px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .metric {
+      min-width: 0;
+      padding: 16px 14px;
+      border-right: 1px solid var(--border);
+    }
+
+    .metric:last-child {
+      border-right: 0;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .metric-value {
+      margin-top: 5px;
+      overflow-wrap: anywhere;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .session-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .session-header-copy {
+      min-width: 0;
+    }
+
+    .session-header .button {
+      flex: 0 0 auto;
+    }
+
+    .session-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .session-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .conversation {
+      margin-top: 28px;
+    }
+
+    .message {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 10px;
+      padding: 15px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .message-avatar {
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      color: var(--muted);
+      background: var(--chrome);
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    .message-role {
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .message-text {
+      max-width: 700px;
+      line-height: 1.65;
+    }
+
+    .code-block {
+      margin: 10px 0 0;
+      padding: 12px;
+      overflow: auto;
+      color: light-dark(#303030, #d4d4d4);
+      background: light-dark(#f4f4f4, #171717);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .empty-state {
+      display: grid;
+      min-height: 440px;
+      place-items: center;
+      text-align: center;
+    }
+
+    .empty-state-inner {
+      max-width: 440px;
+    }
+
+    .empty-icon {
+      display: grid;
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 18px;
+      place-items: center;
+      color: var(--muted);
+      background: var(--chrome);
+      border-radius: 6px;
+    }
+
+    .modal-layer {
+      position: absolute;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      padding: 24px;
+      place-items: center;
+      background: light-dark(rgb(255 255 255 / 0.58), rgb(0 0 0 / 0.58));
+    }
+
+    .modal {
+      width: min(500px, 100%);
+      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 12px 34px var(--shadow);
+    }
+
+    .modal-heading {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 10px;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .modal p {
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .target-box {
+      margin: 16px 0;
+      padding: 12px;
+      background: var(--editor);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+    }
+
+    .target-line {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+
+    .target-line + .target-line {
+      margin-top: 9px;
+    }
+
+    .target-copy {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .handoff-progress {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .handoff-step {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+    }
+
+    .handoff-step.done {
+      color: var(--text);
+    }
+
+    .step-state {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .handoff-step.done .step-state {
+      color: var(--success);
+    }
+
+    .codex-panel {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .codex-brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 16px 13px 12px;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .codex-thread {
+      margin: 6px 8px;
+      padding: 10px;
+      color: var(--selected-text);
+      background: var(--selected);
+      border-radius: 4px;
+    }
+
+    .codex-thread-title {
+      overflow: hidden;
+      font-weight: 500;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .codex-thread-meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .codex-composer {
+      margin: auto 10px 12px;
+      padding: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .composer-placeholder {
+      min-height: 44px;
+      color: var(--muted);
+    }
+
+    .composer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+      color: #ffffff;
+      background: var(--status);
+      font-size: 11px;
+    }
+
+    .status-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .status-item {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    @media (max-width: 760px) {
+      .app-shell {
+        grid-template-rows: 35px auto 22px;
+        overflow: visible;
+      }
+
+      .titlebar {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+
+      .titlebar-spacer {
+        display: none;
+      }
+
+      .workbench {
+        grid-template-columns: 44px minmax(0, 1fr);
+      }
+
+      .activity-button {
+        width: 44px;
+      }
+
+      .sidebar {
+        min-height: 520px;
+      }
+
+      .editor {
+        grid-column: 1 / -1;
+        min-height: 620px;
+        border-top: 1px solid var(--border);
+      }
+
+      .editor-content {
+        width: calc(100% - 28px);
+        padding-top: 28px;
+      }
+
+      .overview-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metric {
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .metric:last-child {
+        border-bottom: 0;
+      }
+
+      .session-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main id="prototype" class="app-shell" aria-label="CodexChat 交互原型">
+    <header class="titlebar">
+      <div class="window-title">
+        <i data-lucide="code-2" aria-hidden="true"></i>
+        <span>Visual Studio Code</span>
+      </div>
+      <div class="title-search" aria-label="命令中心">
+        <i data-lucide="search" aria-hidden="true"></i>
+        <span id="workspace-title">Doc</span>
+      </div>
+      <div class="titlebar-spacer"></div>
+    </header>
+
+    <div class="workbench">
+      <nav class="activitybar" aria-label="活动栏">
+        <div class="activity-group">
+          <button class="activity-button" type="button" aria-label="资源管理器">
+            <i data-lucide="files" aria-hidden="true"></i>
+          </button>
+          <button class="activity-button" type="button" aria-label="搜索">
+            <i data-lucide="search" aria-hidden="true"></i>
+          </button>
+          <button id="codexchat-activity" class="activity-button active" type="button" aria-label="CodexChat">
+            <span class="brand-glyph" aria-hidden="true">CC</span>
+          </button>
+          <button id="codex-activity" class="activity-button" type="button" aria-label="Codex">
+            <span class="brand-glyph" aria-hidden="true">CX</span>
+          </button>
+        </div>
+        <div class="activity-group">
+          <button class="activity-button" type="button" aria-label="设置">
+            <i data-lucide="settings" aria-hidden="true"></i>
+          </button>
+        </div>
+      </nav>
+
+      <aside class="sidebar" aria-label="CodexChat 侧边栏">
+        <div class="sidebar-header">
+          <div id="sidebar-title" class="sidebar-title">CodexChat · 项目</div>
+          <button id="refresh-button" class="icon-button" type="button" aria-label="刷新项目">
+            <i data-lucide="refresh-cw" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div id="sidebar-body" class="sidebar-body"></div>
+      </aside>
+
+      <section id="editor" class="editor" aria-live="polite"></section>
+    </div>
+
+    <footer class="statusbar">
+      <div class="status-group">
+        <div class="status-item"><i data-lucide="git-branch" aria-hidden="true"></i><span>main</span></div>
+        <div class="status-item"><i data-lucide="circle-check" aria-hidden="true"></i><span>0</span></div>
+      </div>
+      <div class="status-group">
+        <div id="scan-status" class="status-item"><i data-lucide="database" aria-hidden="true"></i><span>97 个本地会话</span></div>
+      </div>
+    </footer>
+  </main>
+
+  <script>
+    const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+
+    const projects = [
+      {
+        id: "checkmcp",
+        name: "CheckMCP",
+        path: "D:\\项目\\CheckMCP",
+        firstSeen: "2026-07-31",
+        updated: "今天 14:35",
+        conversations: [
+          {
+            id: "01a018bb-3ae3-7740-adb7-cc355180f5f5",
+            title: "CodexChat 项目级会话管理",
+            created: "今天 14:35",
+            updated: "今天 14:52",
+            archived: false,
+            preview: [
+              { role: "你", text: "Codex VS Code 的对话都放在一起，项目多了无法区分。希望按项目文件夹管理会话。" },
+              { role: "Codex", text: "可以实现为伴生管理器：读取本地 Codex 会话，通过会话元数据中的 cwd 按项目归类，不重新实现聊天。" }
+            ]
+          },
+          {
+            id: "01a01423-2c3d-7b11-aab6-4527cb16b1c5",
+            title: "检查 MCP 文档结构",
+            created: "昨天 17:10",
+            updated: "昨天 18:02",
+            archived: false,
+            preview: [
+              { role: "你", text: "检查当前文档目录，找出还需要补充的部分。" },
+              { role: "Codex", text: "已完成只读检查，并按优先级整理了缺失章节。" }
+            ]
+          },
+          {
+            id: "019fcb83-e13f-7641-89e2-f0d591f6f486",
+            title: "整理开发总结",
+            created: "8 月 4 日",
+            updated: "8 月 4 日",
+            archived: true,
+            preview: [
+              { role: "你", text: "把开发过程整理成可复用的总结文档。" },
+              { role: "Codex", text: "已按背景、方案、实现和风险四部分整理。" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "llm-tools",
+        name: "LLMTools",
+        path: "D:\\项目\\LLMTools",
+        firstSeen: "2026-08-03",
+        updated: "8 月 17 日",
+        conversations: [
+          {
+            id: "01a00dc2-521f-72e1-9c1e-cbe0d8d1b6d6",
+            title: "本地工具调用分析",
+            created: "8 月 17 日",
+            updated: "8 月 17 日",
+            archived: false,
+            preview: [
+              { role: "你", text: "分析本地工具调用链路。" },
+              { role: "Codex", text: "调用链路由扩展宿主、Codex 进程和工具服务三部分组成。" }
+            ]
+          }
+        ]
+      },
+      {
+        id: "ai-edu",
+        name: "AIEdu",
+        path: "D:\\AIEdu",
+        firstSeen: "2026-08-01",
+        updated: "8 月 6 日",
+        conversations: [
+          {
+            id: "019fd0ad-4bfb-7273-858c-754404d7c7fa",
+            title: "教材分析工作流",
+            created: "8 月 5 日",
+            updated: "8 月 6 日",
+            archived: false,
+            preview: [
+              { role: "你", text: "设计教材分析工作流。" },
+              { role: "Codex", text: "建议先建立教材章节索引，再组合检索和分析步骤。" }
+            ]
+          }
+        ]
+      }
+    ];
+
+    const state = {
+      screen: "projects",
+      projectId: null,
+      conversationId: null,
+      query: "",
+      modal: null,
+      handoffStep: 0,
+      workspacePath: "D:\\项目\\CheckMCP\\Doc"
+    };
+
+    const elements = {
+      sidebarBody: document.getElementById("sidebar-body"),
+      sidebarTitle: document.getElementById("sidebar-title"),
+      editor: document.getElementById("editor"),
+      workspaceTitle: document.getElementById("workspace-title"),
+      codexChatActivity: document.getElementById("codexchat-activity"),
+      codexActivity: document.getElementById("codex-activity"),
+      scanStatus: document.getElementById("scan-status")
+    };
+
+    function icon(name) {
+      return `<i data-lucide="${name}" aria-hidden="true"></i>`;
+    }
+
+    function selectedProject() {
+      return projects.find(project => project.id === state.projectId) || null;
+    }
+
+    function selectedConversation() {
+      const project = selectedProject();
+      return project?.conversations.find(item => item.id === state.conversationId) || null;
+    }
+
+    function refreshIcons() {
+      if (window.lucide) {
+        window.lucide.createIcons({ attrs: { width: 16, height: 16, "stroke-width": 1.7 } });
+      }
+    }
+
+    function render() {
+      renderActivity();
+      if (state.screen === "codex") {
+        renderCodex();
+      } else {
+        renderManager();
+      }
+      refreshIcons();
+    }
+
+    function renderActivity() {
+      const inCodex = state.screen === "codex";
+      elements.codexChatActivity.classList.toggle("active", !inCodex);
+      elements.codexActivity.classList.toggle("active", inCodex);
+      elements.workspaceTitle.textContent = inCodex ? `${selectedProject()?.name || "项目"} - Codex` : "Doc - CodexChat";
+    }
+
+    function renderManager() {
+      const project = selectedProject();
+      elements.sidebarTitle.textContent = project ? "CodexChat · 会话" : "CodexChat · 项目";
+      elements.sidebarBody.innerHTML = project ? conversationSidebar(project) : projectSidebar();
+      elements.editor.innerHTML = managerEditor(project, selectedConversation());
+      bindManagerEvents();
+    }
+
+    function projectSidebar() {
+      const query = state.query.trim().toLowerCase();
+      const visible = projects.filter(project => `${project.name} ${project.path}`.toLowerCase().includes(query));
+      return `
+        <div class="search-wrap">
+          <label class="search-box">
+            ${icon("search")}
+            <span class="sr-only">搜索项目</span>
+            <input id="project-search" value="${escapeHtml(state.query)}" placeholder="搜索项目文件夹">
+          </label>
+        </div>
+        <div class="section-label">最近项目</div>
+        <div>
+          ${visible.map(project => `
+            <button class="list-button" type="button" data-project-id="${project.id}">
+              <span class="list-icon">${icon("folder")}</span>
+              <span class="list-copy">
+                <span class="list-name">${project.name}</span>
+                <span class="list-meta">${project.path}</span>
+              </span>
+              <span class="count">${project.conversations.length}</span>
+            </button>
+          `).join("") || `<div class="section-label">未找到项目</div>`}
+        </div>
+        <div class="section-label">其他</div>
+        <button id="choose-folder" class="list-button" type="button">
+          <span class="list-icon">${icon("folder-open")}</span>
+          <span class="list-copy">
+            <span class="list-name">选择其他文件夹</span>
+            <span class="list-meta">使用系统文件夹选择器</span>
+          </span>
+        </button>
+      `;
+    }
+
+    function conversationSidebar(project) {
+      const query = state.query.trim().toLowerCase();
+      const visible = project.conversations.filter(item => item.title.toLowerCase().includes(query));
+      return `
+        <div class="project-banner">
+          <div class="project-banner-top">
+            <button id="back-projects" class="icon-button" type="button" aria-label="返回项目列表">${icon("arrow-left")}</button>
+            <strong>${project.name}</strong>
+          </div>
+          <div class="project-path">${project.path}</div>
+          <div class="project-actions">
+            <button id="enter-codex" class="button primary" type="button">${icon("panel-right-open")}进入 Codex</button>
+            <button id="switch-project" class="icon-button" type="button" aria-label="切换项目">${icon("folder-sync")}</button>
+          </div>
+        </div>
+        <div class="search-wrap">
+          <label class="search-box">
+            ${icon("search")}
+            <span class="sr-only">搜索会话</span>
+            <input id="conversation-search" value="${escapeHtml(state.query)}" placeholder="搜索当前项目会话">
+          </label>
+        </div>
+        <div class="section-label">最近更新</div>
+        <div>
+          ${visible.map(item => `
+            <button class="list-button ${item.id === state.conversationId ? "active" : ""}" type="button" data-conversation-id="${item.id}">
+              <span class="list-icon">${icon(item.archived ? "archive" : "message-square")}</span>
+              <span class="list-copy">
+                <span class="list-name">${escapeHtml(item.title)}</span>
+                <span class="list-meta">${item.updated}${item.archived ? " · 已归档" : ""}</span>
+              </span>
+            </button>
+          `).join("") || `<div class="section-label">未找到会话</div>`}
+        </div>
+      `;
+    }
+
+    function managerEditor(project, conversation) {
+      if (!project) {
+        return `
+          <div class="editor-tabbar"><div class="editor-tab">${icon("folders")}<span>选择项目</span></div></div>
+          <div class="editor-content empty-state">
+            <div class="empty-state-inner">
+              <div class="empty-icon">${icon("folder-search")}</div>
+              <h1>选择项目文件夹</h1>
+              <p class="lead">从 Codex 本地会话中识别到 ${projects.length} 个项目。选择后只加载该项目的会话。</p>
+              <button id="editor-choose-first" class="button primary" type="button">${icon("folder-open")}选择 CheckMCP</button>
+            </div>
+          </div>
+        `;
+      }
+
+      if (!conversation) {
+        return `
+          <div class="editor-tabbar"><div class="editor-tab">${icon("folder")}<span>${project.name}</span></div></div>
+          <div class="editor-content">
+            <div class="eyebrow">${icon("folder-open")}<span>${project.path}</span></div>
+            <h1>${project.name}</h1>
+            <p class="lead">项目会话已加载。可打开 Codex 开始新工作，也可以选择历史会话继续。</p>
+            <div class="overview-grid">
+              <div class="metric"><div class="metric-label">会话</div><div class="metric-value">${project.conversations.length}</div></div>
+              <div class="metric"><div class="metric-label">首次发现</div><div class="metric-value">${project.firstSeen}</div></div>
+              <div class="metric"><div class="metric-label">最近更新</div><div class="metric-value">${project.updated}</div></div>
+            </div>
+            <div class="action-row">
+              <button id="editor-enter-codex" class="button primary" type="button">${icon("panel-right-open")}进入 Codex</button>
+              <button id="editor-new-codex" class="button" type="button">${icon("square-pen")}新建 Codex 会话</button>
+            </div>
+          </div>
+          ${renderModal()}
+        `;
+      }
+
+      return `
+        <div class="editor-tabbar"><div class="editor-tab">${icon("message-square")}<span>${escapeHtml(conversation.title)}</span></div></div>
+        <div class="editor-content">
+          <div class="session-header">
+            <div class="session-header-copy">
+              <div class="eyebrow">${icon("folder")}<span>${project.name}</span></div>
+              <h1>${escapeHtml(conversation.title)}</h1>
+              <div class="session-meta">
+                <span>${icon("calendar")}${conversation.created}</span>
+                <span>${icon("clock-3")}${conversation.updated}</span>
+                <span>${icon(conversation.archived ? "archive" : "circle-dot")}${conversation.archived ? "已归档" : "本地会话"}</span>
+              </div>
+            </div>
+            <button id="continue-in-codex" class="button primary" type="button">${icon("external-link")}在 Codex 中继续</button>
+          </div>
+          <div class="conversation" aria-label="会话预览">
+            ${conversation.preview.map(message => `
+              <article class="message">
+                <div class="message-avatar">${message.role === "你" ? "你" : "CX"}</div>
+                <div>
+                  <div class="message-role">${message.role}</div>
+                  <div class="message-text">${escapeHtml(message.text)}</div>
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        </div>
+        ${renderModal()}
+      `;
+    }
+
+    function renderModal() {
+      if (!state.modal) return "";
+      const project = selectedProject();
+      const conversation = selectedConversation();
+      const sameWorkspace = state.workspacePath.toLowerCase().startsWith(project.path.toLowerCase());
+
+      if (state.modal === "handoff") {
+        return `
+          <div class="modal-layer" role="presentation">
+            <section class="modal" role="dialog" aria-modal="true" aria-labelledby="handoff-title">
+              <div id="handoff-title" class="modal-heading">${icon("loader-circle")}正在进入 Codex</div>
+              <div class="handoff-progress">
+                ${handoffStep("folder-check", `打开 ${project.name} 工作区`, 1)}
+                ${handoffStep("blocks", "激活 OpenAI Codex 扩展", 2)}
+                ${handoffStep("message-square", conversation ? "定位本地会话" : "打开 Codex 侧栏", 3)}
+              </div>
+            </section>
+          </div>
+        `;
+      }
+
+      return `
+        <div class="modal-layer" role="presentation">
+          <section class="modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+            <div id="confirm-title" class="modal-heading">${icon("panel-right-open")}${conversation ? "在 Codex 中继续" : "进入 Codex"}</div>
+            <p>${sameWorkspace ? "当前工作区已包含目标项目，将直接打开 Codex。" : "目标项目与当前工作区不同。VS Code 将切换工作区，重新加载后继续打开 Codex。"}</p>
+            <div class="target-box">
+              <div class="target-line">${icon("folder")}<div class="target-copy">${project.path}</div></div>
+              <div class="target-line">${icon(conversation ? "message-square" : "square-pen")}<div class="target-copy">${conversation ? conversation.title : "Codex 项目入口"}</div></div>
+            </div>
+            <div class="modal-actions">
+              <button id="cancel-handoff" class="button" type="button">取消</button>
+              <button id="confirm-handoff" class="button primary" type="button">${sameWorkspace ? "打开 Codex" : "打开项目并继续"}</button>
+            </div>
+          </section>
+        </div>
+      `;
+    }
+
+    function handoffStep(iconName, label, step) {
+      const done = state.handoffStep >= step;
+      const active = state.handoffStep + 1 === step;
+      return `
+        <div class="handoff-step ${done ? "done" : ""}">
+          ${icon(done ? "circle-check" : active ? "loader-circle" : iconName)}
+          <span>${label}</span>
+          <span class="step-state">${done ? "完成" : active ? "处理中" : "等待"}</span>
+        </div>
+      `;
+    }
+
+    function renderCodex() {
+      const project = selectedProject();
+      const conversation = selectedConversation();
+      elements.sidebarTitle.textContent = "Codex";
+      elements.sidebarBody.innerHTML = `
+        <div class="codex-panel">
+          <div class="codex-brand"><span class="brand-glyph">CX</span><span>Codex</span></div>
+          <div class="section-label">当前会话</div>
+          <div class="codex-thread">
+            <div class="codex-thread-title">${escapeHtml(conversation?.title || `新建 ${project.name} 会话`)}</div>
+            <div class="codex-thread-meta">${project.name} · 本地</div>
+          </div>
+          <div class="codex-composer">
+            <div class="composer-placeholder">向 Codex 发送消息</div>
+            <div class="composer-footer">
+              <button class="icon-button" type="button" aria-label="添加上下文">${icon("plus")}</button>
+              <button class="icon-button" type="button" aria-label="发送">${icon("arrow-up")}</button>
+            </div>
+          </div>
+        </div>
+      `;
+      elements.editor.innerHTML = `
+        <div class="editor-tabbar"><div class="editor-tab">${icon("code-2")}<span>${project.name}</span></div></div>
+        <div class="editor-content">
+          <div class="eyebrow">${icon("panel-right-open")}<span>OpenAI Codex</span></div>
+          <h1>${conversation ? escapeHtml(conversation.title) : `开始 ${project.name} 的新工作`}</h1>
+          <p class="lead">${conversation ? "目标本地会话已交给 Codex 扩展。" : "项目工作区已打开，Codex 侧栏已激活。"}</p>
+          <div class="overview-grid">
+            <div class="metric"><div class="metric-label">项目</div><div class="metric-value">${project.name}</div></div>
+            <div class="metric"><div class="metric-label">工作区</div><div class="metric-value">已打开</div></div>
+            <div class="metric"><div class="metric-label">会话</div><div class="metric-value">${conversation ? "已定位" : "新会话"}</div></div>
+          </div>
+          <button id="return-manager" class="button" type="button">${icon("arrow-left")}返回 CodexChat</button>
+        </div>
+      `;
+      document.getElementById("return-manager").addEventListener("click", () => {
+        state.screen = "manager";
+        render();
+      });
+    }
+
+    function bindManagerEvents() {
+      document.querySelectorAll("[data-project-id]").forEach(button => {
+        button.addEventListener("click", () => chooseProject(button.dataset.projectId));
+      });
+
+      document.querySelectorAll("[data-conversation-id]").forEach(button => {
+        button.addEventListener("click", () => {
+          state.conversationId = button.dataset.conversationId;
+          state.modal = null;
+          render();
+        });
+      });
+
+      document.getElementById("project-search")?.addEventListener("input", event => {
+        state.query = event.target.value;
+        renderManager();
+        document.getElementById("project-search")?.focus();
+      });
+
+      document.getElementById("conversation-search")?.addEventListener("input", event => {
+        state.query = event.target.value;
+        renderManager();
+        document.getElementById("conversation-search")?.focus();
+      });
+
+      document.getElementById("choose-folder")?.addEventListener("click", () => chooseProject("checkmcp"));
+      document.getElementById("editor-choose-first")?.addEventListener("click", () => chooseProject("checkmcp"));
+      document.getElementById("back-projects")?.addEventListener("click", resetProject);
+      document.getElementById("switch-project")?.addEventListener("click", resetProject);
+      document.getElementById("enter-codex")?.addEventListener("click", () => requestHandoff(false));
+      document.getElementById("editor-enter-codex")?.addEventListener("click", () => requestHandoff(false));
+      document.getElementById("editor-new-codex")?.addEventListener("click", () => requestHandoff(false, true));
+      document.getElementById("continue-in-codex")?.addEventListener("click", () => requestHandoff(true));
+      document.getElementById("cancel-handoff")?.addEventListener("click", () => {
+        state.modal = null;
+        render();
+      });
+      document.getElementById("confirm-handoff")?.addEventListener("click", beginHandoff);
+    }
+
+    function chooseProject(projectId) {
+      state.projectId = projectId;
+      state.conversationId = null;
+      state.query = "";
+      state.modal = null;
+      render();
+    }
+
+    function resetProject() {
+      state.projectId = null;
+      state.conversationId = null;
+      state.query = "";
+      state.modal = null;
+      render();
+    }
+
+    function requestHandoff(withConversation, newConversation = false) {
+      if (!withConversation || newConversation) {
+        state.conversationId = null;
+      }
+      state.modal = "confirm";
+      render();
+    }
+
+    function beginHandoff() {
+      const project = selectedProject();
+      const conversation = selectedConversation();
+      state.modal = "handoff";
+      state.handoffStep = 0;
+      render();
+
+      if (vscode) {
+        vscode.postMessage({
+          type: "openInCodex",
+          projectPath: project.path,
+          sessionId: conversation?.id || null,
+          mode: conversation ? "resume" : "open"
+        });
+      }
+
+      const advance = () => {
+        state.handoffStep += 1;
+        render();
+        if (state.handoffStep < 3) {
+          window.setTimeout(advance, 620);
+        } else {
+          window.setTimeout(() => {
+            state.modal = null;
+            state.workspacePath = project.path;
+            state.screen = "codex";
+            render();
+          }, 480);
+        }
+      };
+
+      window.setTimeout(advance, 420);
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    document.getElementById("refresh-button").addEventListener("click", () => {
+      elements.scanStatus.innerHTML = `${icon("loader-circle")}<span>正在扫描...</span>`;
+      refreshIcons();
+      window.setTimeout(() => {
+        elements.scanStatus.innerHTML = `${icon("database")}<span>97 个本地会话</span>`;
+        refreshIcons();
+      }, 700);
+    });
+
+    elements.codexChatActivity.addEventListener("click", () => {
+      state.screen = "manager";
+      render();
+    });
+
+    elements.codexActivity.addEventListener("click", () => {
+      if (!state.projectId) state.projectId = "checkmcp";
+      state.screen = "codex";
+      render();
+    });
+
+    window.addEventListener("message", event => {
+      if (event.data?.type === "codexHandoffComplete") {
+        state.modal = null;
+        state.screen = "codex";
+        render();
+      }
+    });
+
+    render();
+  </script>
+</body>
+</html>

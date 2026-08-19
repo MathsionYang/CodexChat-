@@ -1,0 +1,144 @@
+{
+  "name": "codexchat",
+  "displayName": "CodexChat",
+  "description": "按项目文件夹浏览和恢复本地 Codex 会话。",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MathsionYang/CodexChat-.git"
+  },
+  "homepage": "https://github.com/MathsionYang/CodexChat-#readme",
+  "bugs": {
+    "url": "https://github.com/MathsionYang/CodexChat-/issues"
+  },
+  "engines": {
+    "vscode": "^1.96.2"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "codex",
+    "chat",
+    "session",
+    "project"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:codexChat.sidebar",
+    "onCommand:codexChat.refresh",
+    "onCommand:codexChat.selectProject",
+    "onCommand:codexChat.openCodex"
+  ],
+  "main": "./out/src/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codexChatContainer",
+          "title": "CodexChat",
+          "icon": "codexchat-icon-b-terminal.svg"
+        }
+      ]
+    },
+    "views": {
+      "codexChatContainer": [
+        {
+          "id": "codexChat.sidebar",
+          "name": "项目会话",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "codexChat.refresh",
+        "title": "刷新本地会话",
+        "category": "CodexChat",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codexChat.selectProject",
+        "title": "选择项目文件夹",
+        "category": "CodexChat",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "codexChat.openCodex",
+        "title": "进入 Codex",
+        "category": "CodexChat",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "codexChat.openSettings",
+        "title": "打开设置",
+        "category": "CodexChat",
+        "icon": "$(settings-gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "codexChat.selectProject",
+          "when": "view == codexChat.sidebar",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codexChat.refresh",
+          "when": "view == codexChat.sidebar",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codexChat.openSettings",
+          "when": "view == codexChat.sidebar",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CodexChat",
+      "properties": {
+        "codexChat.codexHome": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Codex 数据目录。留空时使用当前用户目录下的 .codex。"
+        },
+        "codexChat.includeArchivedSessions": {
+          "type": "boolean",
+          "default": true,
+          "description": "在项目会话中包含 archived_sessions 下的归档会话。"
+        },
+        "codexChat.enableExperimentalSessionHandoff": {
+          "type": "boolean",
+          "default": true,
+          "description": "允许已验证的 Codex 扩展版本通过内部本地会话路由恢复历史会话。"
+        },
+        "codexChat.confirmWorkspaceSwitch": {
+          "type": "boolean",
+          "default": true,
+          "description": "进入其他项目的 Codex 前确认切换 VS Code 工作区。"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "node scripts/clean.js",
+    "compile": "tsc -p .",
+    "watch": "tsc -w -p .",
+    "test": "npm run compile && node --test out/test/*.test.js",
+    "package": "npm run clean && npm run compile && vsce package --allow-missing-repository"
+  },
+  "dependencies": {
+    "@vscode/codicons": "^0.0.36"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.96.0",
+    "@vscode/vsce": "^3.2.1",
+    "ecdsa-sig-formatter": "^1.0.11",
+    "typescript": "^5.7.2"
+  }
+}

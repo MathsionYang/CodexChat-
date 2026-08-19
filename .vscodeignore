@@ -1,0 +1,13 @@
+.vscode/**
+.github/**
+img/**
+src/**
+test/**
+scripts/**
+out/test/**
+tsconfig.json
+交互原型.html
+需求文档.md
+进入Codex扩展设计.md
+*.vsix
+**/*.map
