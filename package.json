@@ -2,7 +2,7 @@
   "name": "codexchat",
   "displayName": "CodexChat",
   "description": "按项目文件夹浏览和恢复本地 Codex 会话。",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "MathsionYang",
   "icon": "codexchat-icon-b-terminal.png",
   "license": "MIT",

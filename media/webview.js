@@ -4,6 +4,7 @@
   const view = document.body.dataset.view;
   let sidebarState = null;
   let query = "";
+  let isSearchComposing = false;
 
   if (!root) return;
 
@@ -98,14 +99,23 @@
   }
 
   function bindSidebarEvents() {
-    root.querySelector("#search")?.addEventListener("input", event => {
+    const searchInput = root.querySelector("#search");
+    searchInput?.addEventListener("compositionstart", () => {
+      isSearchComposing = true;
+    });
+    searchInput?.addEventListener("compositionend", event => {
+      isSearchComposing = false;
       query = event.target.value;
       renderSidebar();
-      const searchInput = root.querySelector("#search");
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.setSelectionRange(query.length, query.length);
+      restoreSearchFocus();
+    });
+    searchInput?.addEventListener("input", event => {
+      query = event.target.value;
+      if (isSearchComposing || event.isComposing) {
+        return;
       }
+      renderSidebar();
+      restoreSearchFocus();
     });
     root.querySelector("#choose-folder")?.addEventListener("click", () => post("chooseFolder"));
     root.querySelector("#refresh")?.addEventListener("click", () => post("refresh"));
@@ -128,6 +138,14 @@
     root.querySelectorAll("[data-resume-id]").forEach(button => {
       button.addEventListener("click", () => post("resumeConversation", { sessionId: button.dataset.resumeId }));
     });
+  }
+
+  function restoreSearchFocus() {
+    const searchInput = root.querySelector("#search");
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.setSelectionRange(query.length, query.length);
+    }
   }
 
   function renderDetail(detail) {
