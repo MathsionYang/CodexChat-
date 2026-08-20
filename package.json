@@ -1,7 +1,7 @@
 {
   "name": "codexchat",
-  "displayName": "CodexChat",
-  "description": "按项目文件夹浏览和恢复本地 Codex 会话。",
+  "displayName": "%manifest.displayName%",
+  "description": "%manifest.description%",
   "version": "0.1.3",
   "publisher": "MathsionYang",
   "icon": "codexchat-icon-b-terminal.png",
@@ -48,7 +48,7 @@
       "codexChatContainer": [
         {
           "id": "codexChat.sidebar",
-          "name": "项目会话",
+          "name": "%manifest.view.projectSessions%",
           "type": "webview"
         }
       ]
@@ -56,25 +56,25 @@
     "commands": [
       {
         "command": "codexChat.refresh",
-        "title": "刷新本地会话",
+        "title": "%command.refresh%",
         "category": "CodexChat",
         "icon": "$(refresh)"
       },
       {
         "command": "codexChat.selectProject",
-        "title": "选择项目文件夹",
+        "title": "%command.selectProject%",
         "category": "CodexChat",
         "icon": "$(folder-opened)"
       },
       {
         "command": "codexChat.openCodex",
-        "title": "进入 Codex",
+        "title": "%command.openCodex%",
         "category": "CodexChat",
         "icon": "$(open-preview)"
       },
       {
         "command": "codexChat.openSettings",
-        "title": "打开设置",
+        "title": "%command.openSettings%",
         "category": "CodexChat",
         "icon": "$(settings-gear)"
       }
@@ -105,22 +105,22 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "description": "Codex 数据目录。留空时使用当前用户目录下的 .codex。"
+          "description": "%config.codexHome%"
         },
         "codexChat.includeArchivedSessions": {
           "type": "boolean",
           "default": true,
-          "description": "在项目会话中包含 archived_sessions 下的归档会话。"
+          "description": "%config.includeArchivedSessions%"
         },
         "codexChat.enableExperimentalSessionHandoff": {
           "type": "boolean",
           "default": true,
-          "description": "允许已验证的 Codex 扩展版本通过内部本地会话路由恢复历史会话。"
+          "description": "%config.enableExperimentalSessionHandoff%"
         },
         "codexChat.confirmWorkspaceSwitch": {
           "type": "boolean",
           "default": true,
-          "description": "进入其他项目的 Codex 前确认切换 VS Code 工作区。"
+          "description": "%config.confirmWorkspaceSwitch%"
         }
       }
     }

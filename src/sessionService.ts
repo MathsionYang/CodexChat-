@@ -3,10 +3,12 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { CodexSessionRepository } from "./codexSessionRepository";
 import { CustomProject, SessionIndex } from "./models";
+import { resolveLocale } from "./i18n";
 
 const CUSTOM_PROJECTS_KEY = "codexChat.customProjects";
 
 export class SessionService implements vscode.Disposable {
+  private readonly locale = resolveLocale(vscode.env.language);
   private readonly changeEmitter = new vscode.EventEmitter<SessionIndex>();
   private readonly disposables: vscode.Disposable[] = [];
   private watchers: vscode.FileSystemWatcher[] = [];
@@ -19,14 +21,14 @@ export class SessionService implements vscode.Disposable {
 
   public constructor(private readonly context: vscode.ExtensionContext) {
     const codexHome = this.resolveCodexHome();
-    this.currentRepository = new CodexSessionRepository(codexHome);
+    this.currentRepository = new CodexSessionRepository(codexHome, this.locale);
     this.currentIndex = emptyIndex(codexHome);
     this.installWatchers();
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration(event => {
         if (event.affectsConfiguration("codexChat.codexHome")
           || event.affectsConfiguration("codexChat.includeArchivedSessions")) {
-          this.currentRepository = new CodexSessionRepository(this.resolveCodexHome());
+          this.currentRepository = new CodexSessionRepository(this.resolveCodexHome(), this.locale);
           this.installWatchers();
           void this.refresh();
         }

@@ -1,0 +1,13 @@
+{
+  "manifest.displayName": "CodexChat",
+  "manifest.description": "Browse and restore local Codex conversations by project folder.",
+  "manifest.view.projectSessions": "Project sessions",
+  "command.refresh": "Refresh local sessions",
+  "command.selectProject": "Select project folder",
+  "command.openCodex": "Open Codex",
+  "command.openSettings": "Open settings",
+  "config.codexHome": "Codex data directory. Leave empty to use the current user's `.codex` folder.",
+  "config.includeArchivedSessions": "Include archived conversations from `archived_sessions` in project conversations.",
+  "config.enableExperimentalSessionHandoff": "Allow verified Codex extension versions to restore history through the local conversation route.",
+  "config.confirmWorkspaceSwitch": "Confirm switching VS Code workspace before opening Codex for another project."
+}

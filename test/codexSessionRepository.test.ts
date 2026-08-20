@@ -46,7 +46,7 @@ test("scans sessions, groups by project, and reads conversation content", async 
   const sessionFile = path.join(sessionDirectory, `rollout-${sessionId}.jsonl`);
   await fs.writeFile(sessionFile, records.map(record => JSON.stringify(record)).join("\n") + "\n{", "utf8");
 
-  const repository = new CodexSessionRepository(temporary);
+  const repository = new CodexSessionRepository(temporary, "en");
   const index = await repository.scan({ includeArchived: true });
 
   assert.equal(index.projects.length, 1);
@@ -67,7 +67,7 @@ test("keeps manually selected projects that have no conversations", async t => {
   const projectPath = path.join(temporary, "empty-project");
   await fs.mkdir(projectPath, { recursive: true });
 
-  const repository = new CodexSessionRepository(temporary);
+  const repository = new CodexSessionRepository(temporary, "en");
   const index = await repository.scan({
     includeArchived: true,
     customProjects: [{ path: projectPath, addedAt: "2026-08-19T10:00:00.000Z" }],

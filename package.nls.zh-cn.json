@@ -1,0 +1,13 @@
+{
+  "manifest.displayName": "CodexChat",
+  "manifest.description": "按项目文件夹浏览和恢复本地 Codex 会话。",
+  "manifest.view.projectSessions": "项目会话",
+  "command.refresh": "刷新本地会话",
+  "command.selectProject": "选择项目文件夹",
+  "command.openCodex": "进入 Codex",
+  "command.openSettings": "打开设置",
+  "config.codexHome": "Codex 数据目录。留空时使用当前用户目录下的 `.codex` 文件夹。",
+  "config.includeArchivedSessions": "在项目会话中包含 `archived_sessions` 下的归档会话。",
+  "config.enableExperimentalSessionHandoff": "允许经过验证的 Codex 扩展版本通过本地会话路由恢复历史会话。",
+  "config.confirmWorkspaceSwitch": "打开另一个项目的 Codex 前，先确认切换 VS Code 工作区。"
+}

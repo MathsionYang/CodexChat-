@@ -10,6 +10,7 @@ import {
   ProjectSummary,
   SessionIndex,
 } from "./models";
+import { formatDate, Locale, localize } from "./i18n";
 import { normalizeProjectPath, projectIdForPath, projectNameForPath } from "./pathUtils";
 
 interface IndexedTitle {
@@ -32,7 +33,10 @@ interface ScanOptions {
 const MAX_DETAIL_ENTRIES = 2_000;
 
 export class CodexSessionRepository {
-  public constructor(private readonly codexHome: string) {}
+  public constructor(
+    private readonly codexHome: string,
+    private readonly locale: Locale,
+  ) {}
 
   public get home(): string {
     return this.codexHome;
@@ -54,7 +58,7 @@ export class CodexSessionRepository {
           conversationCount: 0,
           projectCount: options.customProjects?.length ?? 0,
           failedFileCount: 0,
-          warnings: [`Codex 数据目录不存在：${this.codexHome}`],
+          warnings: [localize(this.locale, "repository.homeMissing", { codexHome: this.codexHome })],
         },
       };
     }
@@ -83,7 +87,10 @@ export class CodexSessionRepository {
         }
       } catch (error) {
         failedFileCount += 1;
-        warnings.push(`${path.basename(item.filePath)}：${toErrorMessage(error)}`);
+        warnings.push(localize(this.locale, "repository.fileReadError", {
+          fileName: path.basename(item.filePath),
+          message: toErrorMessage(error),
+        }));
       }
     }
 
@@ -111,31 +118,36 @@ export class CodexSessionRepository {
 
     const stream = fs.createReadStream(summary.filePath, { encoding: "utf8" });
     const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
-    for await (const line of lines) {
-      if (!line.trim()) {
-        continue;
-      }
+    try {
+      for await (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
 
-      let record: unknown;
-      try {
-        record = JSON.parse(line);
-      } catch {
-        malformedLineCount += 1;
-        continue;
-      }
+        let record: unknown;
+        try {
+          record = JSON.parse(line);
+        } catch {
+          malformedLineCount += 1;
+          continue;
+        }
 
-      const parsed = parseConversationRecord(record);
-      for (const entry of parsed.primary) {
-        addDeduplicated(entries, entry);
-      }
-      for (const entry of parsed.fallback) {
-        addDeduplicated(fallbackEntries, entry);
-      }
+        const parsed = parseConversationRecord(record, this.locale);
+        for (const entry of parsed.primary) {
+          addDeduplicated(entries, entry);
+        }
+        for (const entry of parsed.fallback) {
+          addDeduplicated(fallbackEntries, entry);
+        }
 
-      if (entries.length >= MAX_DETAIL_ENTRIES) {
-        truncated = true;
-        break;
+        if (entries.length >= MAX_DETAIL_ENTRIES) {
+          truncated = true;
+          break;
+        }
       }
+    } finally {
+      lines.close();
+      stream.destroy();
     }
 
     return {
@@ -156,29 +168,34 @@ export class CodexSessionRepository {
     const stream = fs.createReadStream(indexPath, { encoding: "utf8" });
     const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
     let malformed = 0;
-    for await (const line of lines) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        const value = JSON.parse(line) as Record<string, unknown>;
-        const id = asNonEmptyString(value.id);
-        const title = asNonEmptyString(value.thread_name);
-        if (!id || !title) {
+    try {
+      for await (const line of lines) {
+        if (!line.trim()) {
           continue;
         }
-        const current = indexed.get(id);
-        const updatedAt = asIsoString(value.updated_at);
-        if (!current || compareDates(updatedAt, current.updatedAt) >= 0) {
-          indexed.set(id, { title, updatedAt });
+        try {
+          const value = JSON.parse(line) as Record<string, unknown>;
+          const id = asNonEmptyString(value.id);
+          const title = asNonEmptyString(value.thread_name);
+          if (!id || !title) {
+            continue;
+          }
+          const current = indexed.get(id);
+          const updatedAt = asIsoString(value.updated_at);
+          if (!current || compareDates(updatedAt, current.updatedAt) >= 0) {
+            indexed.set(id, { title, updatedAt });
+          }
+        } catch {
+          malformed += 1;
         }
-      } catch {
-        malformed += 1;
       }
+    } finally {
+      lines.close();
+      stream.destroy();
     }
 
     if (malformed > 0) {
-      warnings.push(`session_index.jsonl 中有 ${malformed} 行无法解析。`);
+      warnings.push(localize(this.locale, "repository.indexMalformed", { count: malformed }));
     }
     return indexed;
   }
@@ -204,7 +221,7 @@ export class CodexSessionRepository {
       projectId,
       projectPath,
       filePath,
-      title: indexed?.title || (await readFirstUserMessage(filePath)) || fallbackTitle(meta.id, createdAt),
+      title: indexed?.title || (await readFirstUserMessage(filePath)) || fallbackTitle(meta.id, createdAt, this.locale),
       createdAt,
       updatedAt,
       archived,
@@ -231,7 +248,7 @@ export class CodexSessionRepository {
       const projectPath = conversation.projectPath;
       projects.set(conversation.projectId, {
         id: conversation.projectId,
-        name: projectPath ? projectNameForPath(projectPath) : "未归类会话",
+        name: projectPath ? projectNameForPath(projectPath, localize(this.locale, "repository.uncategorizedProject")) : localize(this.locale, "repository.uncategorizedProject"),
         path: projectPath,
         normalizedPath: normalizeProjectPath(projectPath),
         firstConversationAt: conversation.createdAt,
@@ -253,7 +270,7 @@ export class CodexSessionRepository {
       }
       projects.set(id, {
         id,
-        name: projectNameForPath(custom.path),
+        name: projectNameForPath(custom.path, localize(this.locale, "repository.uncategorizedProject")),
         path: path.resolve(custom.path),
         normalizedPath: normalized,
         firstConversationAt: custom.addedAt,
@@ -272,7 +289,7 @@ export class CodexSessionRepository {
   private createCustomProjects(customProjects: CustomProject[]): ProjectSummary[] {
     return customProjects.map(custom => ({
       id: projectIdForPath(custom.path),
-      name: projectNameForPath(custom.path),
+      name: projectNameForPath(custom.path, localize(this.locale, "repository.uncategorizedProject")),
       path: path.resolve(custom.path),
       normalizedPath: normalizeProjectPath(custom.path),
       firstConversationAt: custom.addedAt,
@@ -368,7 +385,7 @@ async function readFirstUserMessage(filePath: string): Promise<string | undefine
       inspected += 1;
       try {
         const record = JSON.parse(line);
-        const parsed = parseConversationRecord(record);
+        const parsed = parseConversationRecord(record, "en");
         const user = parsed.primary.find(entry => entry.kind === "user")
           ?? parsed.fallback.find(entry => entry.kind === "user");
         if (user?.content) {
@@ -388,7 +405,10 @@ async function readFirstUserMessage(filePath: string): Promise<string | undefine
   return undefined;
 }
 
-function parseConversationRecord(record: unknown): { primary: ConversationEntry[]; fallback: ConversationEntry[] } {
+function parseConversationRecord(
+  record: unknown,
+  locale: Locale,
+): { primary: ConversationEntry[]; fallback: ConversationEntry[] } {
   if (!isRecord(record)) {
     return { primary: [], fallback: [] };
   }
@@ -410,7 +430,7 @@ function parseConversationRecord(record: unknown): { primary: ConversationEntry[
     }
 
     if (payloadType === "function_call" || payloadType === "custom_tool_call") {
-      const name = asNonEmptyString(payload.name) || "工具调用";
+      const name = asNonEmptyString(payload.name) || localize(locale, "repository.toolCall");
       const argumentsText = asNonEmptyString(payload.arguments) || asNonEmptyString(payload.input);
       return {
         primary: [{
@@ -508,9 +528,11 @@ function earliestIso(...values: Array<string | undefined>): string {
   return valid.reduce((earliest, value) => Date.parse(value) < Date.parse(earliest) ? value : earliest);
 }
 
-function fallbackTitle(id: string, createdAt: string): string {
-  const date = Number.isNaN(Date.parse(createdAt)) ? "" : new Date(createdAt).toLocaleDateString("zh-CN");
-  return date ? `Codex 会话 · ${date}` : `Codex 会话 · ${id.slice(0, 8)}`;
+function fallbackTitle(id: string, createdAt: string, locale: Locale): string {
+  const date = Number.isNaN(Date.parse(createdAt)) ? "" : formatDate(locale, createdAt);
+  return date
+    ? localize(locale, "repository.fallbackTitleDate", { date })
+    : localize(locale, "repository.fallbackTitleId", { id: id.slice(0, 8) });
 }
 
 function compactTitle(content: string): string {

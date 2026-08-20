@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ConversationDetail } from "./models";
 import { CodexHandoffService } from "./codexHandoffService";
+import { Locale, formatDate, localize, webviewContext } from "./i18n";
 import { csp, nonce, webviewAssets } from "./webviewUtils";
 
 export class ConversationPanel {
@@ -10,6 +11,7 @@ export class ConversationPanel {
     context: vscode.ExtensionContext,
     detail: ConversationDetail,
     handoff: CodexHandoffService,
+    locale: Locale,
   ): void {
     if (ConversationPanel.current) {
       ConversationPanel.current.panel.reveal(vscode.ViewColumn.One);
@@ -27,7 +29,7 @@ export class ConversationPanel {
         localResourceRoots: [context.extensionUri],
       },
     );
-    ConversationPanel.current = new ConversationPanel(context, panel, detail, handoff);
+    ConversationPanel.current = new ConversationPanel(context, panel, detail, handoff, locale);
   }
 
   private readonly disposables: vscode.Disposable[] = [];
@@ -38,6 +40,7 @@ export class ConversationPanel {
     private readonly panel: vscode.WebviewPanel,
     detail: ConversationDetail,
     private readonly handoff: CodexHandoffService,
+    private readonly locale: Locale,
   ) {
     this.detail = detail;
     this.render();
@@ -57,9 +60,9 @@ export class ConversationPanel {
     const webview = this.panel.webview;
     const assets = webviewAssets(webview, this.context.extensionUri);
     const scriptNonce = nonce();
-    const data = JSON.stringify({ view: "detail", detail: this.detail }).replaceAll("<", "\\u003c");
+    const data = webviewContext(this.locale, "detail", { detail: this.detail });
     webview.html = `<!doctype html>
-<html lang="zh-CN">
+<html lang="${this.locale}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -70,7 +73,7 @@ export class ConversationPanel {
 </head>
 <body data-view="detail">
   <main id="app"></main>
-  <script nonce="${scriptNonce}">window.__CODEX_CHAT_DATA__=${data};</script>
+  <script nonce="${scriptNonce}">window.__CODEX_CHAT_CONTEXT__=${data};</script>
   <script nonce="${scriptNonce}" src="${assets.scriptUri}"></script>
 </body>
 </html>`;
@@ -87,7 +90,7 @@ export class ConversationPanel {
         break;
       case "copySessionId":
         await vscode.env.clipboard.writeText(summary.id);
-        void vscode.window.showInformationMessage("会话 ID 已复制。");
+        void vscode.window.showInformationMessage(localize(this.locale, "conversation.copiedId"));
         break;
       case "revealSessionFile":
         await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(summary.filePath));

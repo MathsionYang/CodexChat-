@@ -4,6 +4,7 @@ import { CodexHandoffService } from "./codexHandoffService";
 import { ConversationPanel } from "./conversationPanel";
 import { ConversationSummary, ProjectSummary, SessionIndex } from "./models";
 import { SessionService } from "./sessionService";
+import { formatDate, localize, resolveLocale, webviewContext } from "./i18n";
 import { csp, nonce, webviewAssets } from "./webviewUtils";
 
 const SELECTED_PROJECT_KEY = "codexChat.selectedProjectPath";
@@ -11,6 +12,7 @@ const SELECTED_PROJECT_KEY = "codexChat.selectedProjectPath";
 export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Disposable {
   public static readonly viewType = "codexChat.sidebar";
 
+  private readonly locale = resolveLocale(vscode.env.language);
   private view: vscode.WebviewView | undefined;
   private selectedProjectPath: string | undefined;
   private loading = true;
@@ -52,8 +54,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       canSelectFiles: false,
       canSelectFolders: true,
       canSelectMany: false,
-      openLabel: "选择项目",
-      title: "选择 CodexChat 项目文件夹",
+      openLabel: localize(this.locale, "sidebar.selectProjectOpenLabel"),
+      title: localize(this.locale, "sidebar.selectProjectTitle"),
     });
     const folder = folders?.[0];
     if (!folder) {
@@ -66,7 +68,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
   public async openSelectedProjectInCodex(mode: "open" | "new" = "open"): Promise<void> {
     const project = this.getSelectedProject();
     if (!project?.path) {
-      void vscode.window.showInformationMessage("请先在 CodexChat 中选择项目。");
+      void vscode.window.showInformationMessage(localize(this.locale, "sidebar.noProjectSelected"));
       return;
     }
     await this.handoff.openProject(project.path, mode);
@@ -127,17 +129,19 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
   private async openConversation(sessionId: string): Promise<void> {
     const summary = this.findConversation(sessionId);
     if (!summary) {
-      void vscode.window.showWarningMessage("该会话已不存在，请刷新后重试。");
+      void vscode.window.showWarningMessage(localize(this.locale, "sidebar.conversationMissing"));
       return;
     }
     try {
       const detail = await vscode.window.withProgress(
-        { location: vscode.ProgressLocation.Window, title: "正在读取 Codex 会话..." },
+        { location: vscode.ProgressLocation.Window, title: localize(this.locale, "sidebar.readingConversation") },
         () => this.sessions.repository.readConversation(summary),
       );
-      ConversationPanel.show(this.context, detail, this.handoff);
+      ConversationPanel.show(this.context, detail, this.handoff, this.locale);
     } catch (error) {
-      void vscode.window.showErrorMessage(`无法读取会话：${toErrorMessage(error)}`);
+      void vscode.window.showErrorMessage(localize(this.locale, "sidebar.readError", {
+        message: toErrorMessage(error),
+      }));
     }
   }
 
@@ -147,7 +151,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       return;
     }
     if (!summary.projectPath) {
-      void vscode.window.showWarningMessage("该会话没有项目路径，无法在 Codex 中恢复。");
+      void vscode.window.showWarningMessage(localize(this.locale, "sidebar.conversationGone"));
       return;
     }
     await this.handoff.resumeConversation(summary.projectPath, summary.id);
@@ -198,12 +202,12 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
   private async showDiagnostic(): Promise<void> {
     const diagnostic = this.sessions.index.diagnostic;
     const lines = [
-      `Codex 目录：${diagnostic.codexHome}`,
-      `项目：${diagnostic.projectCount}`,
-      `会话：${diagnostic.conversationCount}`,
-      `解析失败：${diagnostic.failedFileCount}`,
-      `扫描时间：${formatDate(diagnostic.scannedAt)}`,
-      ...diagnostic.warnings.map(warning => `警告：${warning}`),
+      `${localize(this.locale, "sidebar.diagnosticCodexHome")}：${diagnostic.codexHome}`,
+      `${localize(this.locale, "sidebar.diagnosticProjectCount")}：${diagnostic.projectCount}`,
+      `${localize(this.locale, "sidebar.diagnosticConversationCount")}：${diagnostic.conversationCount}`,
+      `${localize(this.locale, "sidebar.diagnosticFailedFileCount")}：${diagnostic.failedFileCount}`,
+      `${localize(this.locale, "sidebar.diagnosticScannedAt")}：${formatDate(this.locale, diagnostic.scannedAt)}`,
+      ...diagnostic.warnings.map(warning => `${localize(this.locale, "sidebar.diagnosticWarning")}：${warning}`),
     ];
     const document = await vscode.workspace.openTextDocument({
       language: "text",
@@ -215,8 +219,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
   private html(webview: vscode.Webview): string {
     const assets = webviewAssets(webview, this.context.extensionUri);
     const scriptNonce = nonce();
+    const contextData = webviewContext(this.locale, "sidebar");
     return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${this.locale}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -226,7 +231,8 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
   <title>CodexChat</title>
 </head>
 <body data-view="sidebar">
-  <main id="app"><div class="loading"><span class="codicon codicon-loading codicon-modifier-spin"></span>正在扫描本地会话...</div></main>
+  <main id="app"><div class="loading"><span class="codicon codicon-loading codicon-modifier-spin"></span>${localize(this.locale, "webview.loading")}</div></main>
+  <script nonce="${scriptNonce}">window.__CODEX_CHAT_CONTEXT__=${contextData};</script>
   <script nonce="${scriptNonce}" src="${assets.scriptUri}"></script>
 </body>
 </html>`;
@@ -234,7 +240,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
 }
 
 function samePath(first: string, second: string): boolean {
-  const normalize = (value: string) => path.normalize(path.resolve(value)).toLowerCase();
+  const normalize = (value: string): string => path.normalize(path.resolve(value)).toLowerCase();
   return Boolean(first) && Boolean(second) && normalize(first) === normalize(second);
 }
 
@@ -244,9 +250,4 @@ function isMessage(value: unknown): value is { type: string; [key: string]: unkn
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function formatDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? value : date.toLocaleString("zh-CN");
 }

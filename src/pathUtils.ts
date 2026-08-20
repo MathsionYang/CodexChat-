@@ -19,9 +19,9 @@ export function projectIdForPath(input: string): string {
   return createHash("sha256").update(normalized).digest("hex").slice(0, 24);
 }
 
-export function projectNameForPath(input: string): string {
+export function projectNameForPath(input: string, fallback = "Uncategorized"): string {
   const normalized = path.normalize(input);
-  return path.basename(normalized) || normalized || "未归类";
+  return path.basename(normalized) || normalized || fallback;
 }
 
 export function pathsEqual(first: string, second: string): boolean {

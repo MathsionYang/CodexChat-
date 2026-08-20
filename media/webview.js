@@ -2,6 +2,9 @@
   const vscode = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
   const root = document.getElementById("app");
   const view = document.body.dataset.view;
+  const context = window.__CODEX_CHAT_CONTEXT__ || {};
+  const locale = context.locale === "zh-CN" ? "zh-CN" : "en";
+  const messages = context.messages || {};
   let sidebarState = null;
   let query = "";
   let isSearchComposing = false;
@@ -9,7 +12,7 @@
   if (!root) return;
 
   if (view === "detail") {
-    renderDetail(window.__CODEX_CHAT_DATA__?.detail);
+    renderDetail(context.detail);
     return;
   }
 
@@ -25,7 +28,7 @@
     const index = sidebarState.index;
     const selected = index.projects.find(project => samePath(project.path, sidebarState.selectedProjectPath));
     if (sidebarState.loading) {
-      root.innerHTML = `<div class="loading"><span class="codicon codicon-loading codicon-modifier-spin"></span>正在扫描本地会话...</div>`;
+      root.innerHTML = `<div class="loading"><span class="codicon codicon-loading codicon-modifier-spin"></span>${text("webview.loading")}</div>`;
       return;
     }
 
@@ -37,24 +40,24 @@
     const filtered = index.projects.filter(project => `${project.name} ${project.path}`.toLowerCase().includes(query.toLowerCase()));
     return `
       <div class="toolbar">
-        <span class="toolbar-title">项目</span>
-        ${iconButton("folder-opened", "选择项目文件夹", "choose-folder")}
-        ${iconButton("refresh", "刷新", "refresh")}
-        ${iconButton("info", "诊断信息", "diagnostic")}
+        <span class="toolbar-title">${text("webview.projectsTitle")}</span>
+        ${iconButton("folder-opened", text("webview.chooseProjectFolder"), "choose-folder")}
+        ${iconButton("refresh", text("webview.refresh"), "refresh")}
+        ${iconButton("info", text("webview.diagnostics"), "diagnostic")}
       </div>
-      ${search("搜索项目文件夹")}
+      ${search(text("webview.searchProjects"))}
       ${index.diagnostic.warnings.length ? `<div class="warning">${escapeHtml(index.diagnostic.warnings[0])}</div>` : ""}
-      <div class="section-label">${filtered.length} 个项目</div>
+      <div class="section-label">${formatCount(index.projects.length, "webview.projectCount")}</div>
       ${filtered.map(project => `
         <button class="list-row" type="button" data-project-path="${escapeAttr(project.path)}">
           <span class="list-icon codicon codicon-${project.pathExists ? "folder" : "folder-unopened"}"></span>
           <span class="list-copy">
             <span class="list-name">${escapeHtml(project.name)}</span>
-            <span class="list-meta">${escapeHtml(project.path || "没有项目路径")} · ${formatRelative(project.lastConversationAt)}</span>
+            <span class="list-meta">${escapeHtml(project.path || text("webview.noProjectPath"))} · ${formatRelative(project.lastConversationAt)}</span>
           </span>
           <span class="list-count">${project.conversations.length}</span>
         </button>
-      `).join("") || `<div class="empty">没有匹配的项目</div>`}
+      `).join("") || `<div class="empty">${text("webview.noMatchingProjects")}</div>`}
     `;
   }
 
@@ -63,39 +66,39 @@
     return `
       <div class="project-head">
         <div class="project-title-row">
-          <button id="back-projects" class="icon-button" type="button" aria-label="返回项目列表"><span class="codicon codicon-arrow-left"></span></button>
+          <button id="back-projects" class="icon-button" type="button" aria-label="${text("webview.backToProjects")}"><span class="codicon codicon-arrow-left"></span></button>
           <strong>${escapeHtml(project.name)}</strong>
         </div>
         <div class="project-path">${escapeHtml(project.path)}</div>
         <div class="button-row">
-          <button id="open-codex" class="button primary" type="button"><span class="codicon codicon-open-preview"></span>进入 Codex</button>
-          <button id="new-codex" class="button" type="button"><span class="codicon codicon-new-file"></span>新建会话</button>
+          <button id="open-codex" class="button primary" type="button"><span class="codicon codicon-open-preview"></span>${text("webview.openCodex")}</button>
+          <button id="new-codex" class="button" type="button"><span class="codicon codicon-new-file"></span>${text("webview.newConversation")}</button>
         </div>
       </div>
-      ${search("搜索当前项目会话")}
-      <div class="section-label">${filtered.length} 个会话</div>
+      ${search(text("webview.searchCurrentProjectConversations"))}
+      <div class="section-label">${formatCount(filtered.length, "webview.conversationCount")}</div>
       ${filtered.map(item => `
         <div class="list-row" data-session-row="${item.id}">
           <span class="list-icon codicon codicon-${item.archived ? "archive" : "comment-discussion"}"></span>
           <button class="list-copy conversation-open" type="button" data-session-id="${item.id}">
             <span class="list-name">${escapeHtml(item.title)}</span>
-            <span class="list-meta">${formatRelative(item.updatedAt)}${item.archived ? " · 已归档" : ""}</span>
+            <span class="list-meta">${formatRelative(item.updatedAt)}${item.archived ? ` · ${text("webview.archived")}` : ""}</span>
           </button>
-          <button class="icon-button resume" type="button" data-resume-id="${item.id}" aria-label="在 Codex 中继续">
+          <button class="icon-button resume" type="button" data-resume-id="${item.id}" aria-label="${text("webview.resumeConversation")}">
             <span class="codicon codicon-debug-continue"></span>
           </button>
         </div>
-      `).join("") || `<div class="empty">当前项目没有匹配的会话</div>`}
-      <div class="section-label">扫描于 ${formatDate(index.diagnostic.scannedAt)}</div>
+      `).join("") || `<div class="empty">${text("webview.noMatchingConversations")}</div>`}
+      <div class="section-label">${text("webview.scannedAt", { date: formatDate(index.diagnostic.scannedAt) })}</div>
     `;
   }
 
   function search(placeholder) {
-    return `<label class="search"><span class="codicon codicon-search"></span><input id="search" value="${escapeAttr(query)}" placeholder="${placeholder}" aria-label="${placeholder}"></label>`;
+    return `<label class="search"><span class="codicon codicon-search"></span><input id="search" value="${escapeAttr(query)}" placeholder="${escapeAttr(placeholder)}" aria-label="${escapeAttr(placeholder)}"></label>`;
   }
 
   function iconButton(iconName, label, id) {
-    return `<button id="${id}" class="icon-button" type="button" aria-label="${label}"><span class="codicon codicon-${iconName}"></span></button>`;
+    return `<button id="${id}" class="icon-button" type="button" aria-label="${escapeAttr(label)}"><span class="codicon codicon-${iconName}"></span></button>`;
   }
 
   function bindSidebarEvents() {
@@ -150,7 +153,7 @@
 
   function renderDetail(detail) {
     if (!detail) {
-      root.innerHTML = `<div class="empty">无法加载会话详情</div>`;
+      root.innerHTML = `<div class="empty">${text("webview.detailLoadFailed")}</div>`;
       return;
     }
     const summary = detail.summary;
@@ -158,25 +161,25 @@
       <div class="detail-shell">
         <header class="detail-heading">
           <div class="detail-heading-copy">
-            <div class="detail-path">${escapeHtml(summary.projectPath || "未归类")}</div>
+            <div class="detail-path">${escapeHtml(summary.projectPath || text("webview.uncategorized"))}</div>
             <h1>${escapeHtml(summary.title)}</h1>
             <div class="detail-meta">
               <span><span class="codicon codicon-calendar"></span>${formatDate(summary.createdAt)}</span>
               <span><span class="codicon codicon-history"></span>${formatDate(summary.updatedAt)}</span>
-              <span><span class="codicon codicon-${summary.archived ? "archive" : "record"}"></span>${summary.archived ? "已归档" : "本地会话"}</span>
+              <span><span class="codicon codicon-${summary.archived ? "archive" : "record"}"></span>${summary.archived ? text("webview.archived") : text("webview.localConversation")}</span>
               <span><span class="codicon codicon-symbol-key"></span>${escapeHtml(summary.id)}</span>
             </div>
           </div>
           <div class="detail-actions">
-            <button id="resume" class="button primary" type="button"><span class="codicon codicon-debug-continue"></span>在 Codex 中继续</button>
-            <button id="copy-id" class="button compact" type="button" aria-label="复制会话 ID"><span class="codicon codicon-copy"></span></button>
-            <button id="reveal-file" class="button compact" type="button" aria-label="打开原始文件位置"><span class="codicon codicon-folder-opened"></span></button>
+            <button id="resume" class="button primary" type="button"><span class="codicon codicon-debug-continue"></span>${text("webview.resumeConversation")}</button>
+            <button id="copy-id" class="button compact" type="button" aria-label="${text("webview.copySessionId")}"><span class="codicon codicon-copy"></span></button>
+            <button id="reveal-file" class="button compact" type="button" aria-label="${text("webview.revealSessionFile")}"><span class="codicon codicon-folder-opened"></span></button>
           </div>
         </header>
-        ${detail.malformedLineCount ? `<div class="warning">有 ${detail.malformedLineCount} 行无法解析，已展示其余内容。</div>` : ""}
-        ${detail.truncated ? `<div class="warning">会话内容较大，当前仅展示前 2000 条记录。</div>` : ""}
-        <section class="conversation" aria-label="会话内容">
-          ${detail.entries.map(entry => message(entry)).join("") || `<div class="empty">没有找到可展示的用户或助手消息</div>`}
+        ${detail.malformedLineCount ? `<div class="warning">${text("webview.malformedLines", { count: detail.malformedLineCount })}</div>` : ""}
+        ${detail.truncated ? `<div class="warning">${text("webview.truncated")}</div>` : ""}
+        <section class="conversation" aria-label="${text("webview.conversationContent")}">
+          ${detail.entries.map(entry => message(entry)).join("") || `<div class="empty">${text("webview.noMessages")}</div>`}
         </section>
       </div>
     `;
@@ -186,13 +189,25 @@
   }
 
   function message(entry) {
-    const role = entry.kind === "user" ? "你" : entry.kind === "assistant" ? "Codex" : entry.kind === "tool" ? "工具" : "事件";
-    const avatar = entry.kind === "user" ? "你" : entry.kind === "assistant" ? "CX" : entry.kind === "tool" ? "T" : "E";
+    const role = entry.kind === "user"
+      ? text("webview.userRole")
+      : entry.kind === "assistant"
+        ? text("webview.assistantRole")
+        : entry.kind === "tool"
+          ? text("webview.toolRole")
+          : text("webview.eventRole");
+    const avatar = entry.kind === "user"
+      ? text("webview.userAvatar")
+      : entry.kind === "assistant"
+        ? text("webview.assistantAvatar")
+        : entry.kind === "tool"
+          ? text("webview.toolAvatar")
+          : text("webview.eventAvatar");
     return `
       <article class="message ${entry.kind}">
-        <div class="message-avatar">${avatar}</div>
+        <div class="message-avatar">${escapeHtml(avatar)}</div>
         <div>
-          <div class="message-role">${role}${entry.createdAt ? `<span class="message-time">${formatDate(entry.createdAt)}</span>` : ""}</div>
+          <div class="message-role">${escapeHtml(role)}${entry.createdAt ? `<span class="message-time">${formatDate(entry.createdAt)}</span>` : ""}</div>
           <div class="message-content">${escapeHtml(entry.content)}</div>
         </div>
       </article>
@@ -211,7 +226,7 @@
 
   function formatDate(value) {
     const date = new Date(value);
-    return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat("zh-CN", {
+    return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(locale, {
       dateStyle: "medium",
       timeStyle: "short"
     }).format(date);
@@ -222,11 +237,20 @@
     if (Number.isNaN(date.valueOf())) return value;
     const difference = date.valueOf() - Date.now();
     const absolute = Math.abs(difference);
-    const formatter = new Intl.RelativeTimeFormat("zh-CN", { numeric: "auto" });
+    const formatter = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
     if (absolute < 60 * 60 * 1000) return formatter.format(Math.round(difference / 60000), "minute");
     if (absolute < 24 * 60 * 60 * 1000) return formatter.format(Math.round(difference / 3600000), "hour");
     if (absolute < 7 * 24 * 60 * 60 * 1000) return formatter.format(Math.round(difference / 86400000), "day");
-    return new Intl.DateTimeFormat("zh-CN", { month: "short", day: "numeric" }).format(date);
+    return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(date);
+  }
+
+  function formatCount(count, key) {
+    return text(key, { count });
+  }
+
+  function text(key, values = {}) {
+    const template = messages[key] || key;
+    return template.replace(/\{(\w+)\}/g, (_match, name) => values[name] === undefined ? "" : String(values[name]));
   }
 
   function escapeHtml(value) {
