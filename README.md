@@ -44,3 +44,52 @@ npm.cmd run package
 ## 兼容性说明
 
 `chatgpt.openSidebar` 是当前 OpenAI Codex 扩展公开注册的 VS Code 命令。指定历史会话的直接跳转依赖当前版本中的内部 `/local/:conversationId` 路由，CodexChat 仅对已验证版本启用，并在不兼容时降级为打开 Codex 侧栏和复制会话 ID。
+
+---
+
+# CodexChat English Version
+
+CodexChat is a local session companion manager for the OpenAI Codex VS Code extension. It reads the local `.codex` data directory and groups historical conversations into project folders based on the `cwd` recorded in each session.
+
+## Features
+
+- Automatically scans `sessions` and `archived_sessions`.
+- Browses local Codex conversations by project folder.
+- Displays user messages, Codex responses, and tool-call summaries.
+- Watches local session changes and refreshes automatically.
+- Opens the project workspace and enters the official Codex extension.
+- Restores a selected local conversation in verified Codex versions.
+- Keeps original Codex session files read-only throughout the workflow.
+
+## Usage
+
+1. Open CodexChat from the VS Code Activity Bar.
+2. Select a project from the automatically detected projects, or add one with the folder picker.
+3. Click a conversation to view its read-only content.
+4. Click "Enter Codex" to start working, or click the continue button beside a conversation to resume a historical session.
+
+The default data directory is `.codex` under the current user's home directory. You can override it with the `codexChat.codexHome` setting.
+
+## Interface Preview
+
+### Project Sessions
+
+![CodexChat project conversation list](img/English-01.png)
+
+### Conversation Details
+
+![CodexChat conversation details](img/English-02.png)
+
+## Development
+
+```powershell
+npm.cmd install
+npm.cmd test
+npm.cmd run package
+```
+
+Press `F5` to launch the Extension Development Host.
+
+## Compatibility Notes
+
+`chatgpt.openSidebar` is the VS Code command currently registered publicly by the OpenAI Codex extension. Directly jumping to a specific historical conversation depends on the internal `/local/:conversationId` route in the current version. CodexChat only enables this behavior for verified versions, and falls back to opening the Codex sidebar and copying the conversation ID when the route is incompatible.
