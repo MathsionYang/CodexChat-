@@ -8,6 +8,7 @@
   let sidebarState = null;
   let query = "";
   let isSearchComposing = false;
+  let statsVisible = false;
 
   if (!root) return;
 
@@ -32,7 +33,7 @@
       return;
     }
 
-    root.innerHTML = selected ? renderConversations(selected, index) : renderProjects(index);
+    root.innerHTML = statsVisible ? renderProjectTokenStats(index) : selected ? renderConversations(selected, index) : renderProjects(index);
     bindSidebarEvents();
   }
 
@@ -43,6 +44,7 @@
         <span class="toolbar-title">${text("webview.projectsTitle")}</span>
         ${iconButton("folder-opened", text("webview.chooseProjectFolder"), "choose-folder")}
         ${iconButton("refresh", text("webview.refresh"), "refresh")}
+        ${iconButton("graph", text("webview.projectTokenStats"), "project-token-stats")}
         ${iconButton("info", text("webview.diagnostics"), "diagnostic")}
       </div>
       ${search(text("webview.searchProjects"))}
@@ -59,6 +61,100 @@
         </button>
       `).join("") || `<div class="empty">${text("webview.noMatchingProjects")}</div>`}
     `;
+  }
+
+  function renderProjectTokenStats(index) {
+    const rows = aggregateProjectTokens(index.projects);
+    const filtered = rows.filter(project => `${project.name} ${project.path}`.toLowerCase().includes(query.toLowerCase()));
+    const totalTokens = rows.reduce((sum, project) => sum + project.totalTokens, 0);
+    const measuredConversations = rows.reduce((sum, project) => sum + project.measuredConversationCount, 0);
+    const trackedProjects = rows.filter(project => project.measuredConversationCount > 0).length;
+    const averageTokens = measuredConversations ? totalTokens / measuredConversations : 0;
+    const maxTokens = Math.max(...filtered.map(project => project.totalTokens), 1);
+
+    return `
+      <div class="toolbar">
+        <button id="back-stats" class="icon-button" type="button" aria-label="${text("webview.backToProjects")}"><span class="codicon codicon-arrow-left"></span></button>
+        <span class="toolbar-title">${text("webview.projectTokenStats")}</span>
+        ${iconButton("folder-opened", text("webview.chooseProjectFolder"), "choose-folder")}
+        ${iconButton("refresh", text("webview.refresh"), "refresh")}
+        ${iconButton("graph", text("webview.projectTokenStats"), "project-token-stats", true)}
+        ${iconButton("info", text("webview.diagnostics"), "diagnostic")}
+      </div>
+      ${search(text("webview.searchProjectTokenStats"))}
+      <section class="stats-summary" aria-label="${text("webview.projectTokenStats")}">
+        <div class="stat-card">
+          <span>${text("webview.totalProjectTokens")}</span>
+          <strong title="${formatExactTokenCount(totalTokens)}">${formatTokenCount(totalTokens)}</strong>
+        </div>
+        <div class="stat-card">
+          <span>${text("webview.averageConversationTokens")}</span>
+          <strong title="${formatExactTokenCount(averageTokens)}">${formatTokenCount(averageTokens)}</strong>
+        </div>
+        <div class="stat-card">
+          <span>${text("webview.trackedProjects")}</span>
+          <strong>${trackedProjects}</strong>
+        </div>
+      </section>
+      <div class="section-label">${formatCount(filtered.length, "webview.projectTokenCount")}</div>
+      <div class="stats-list">
+        ${filtered.map(project => projectTokenRow(project, totalTokens, maxTokens)).join("") || `<div class="empty">${text("webview.noProjectTokenStats")}</div>`}
+      </div>
+    `;
+  }
+
+  function projectTokenRow(project, allTokens, maxTokens) {
+    const percent = allTokens ? (project.totalTokens / allTokens) * 100 : 0;
+    const barWidth = Math.max(project.totalTokens ? (project.totalTokens / maxTokens) * 100 : 0, project.totalTokens ? 4 : 0);
+    return `
+      <button class="stats-row" type="button" data-project-path="${escapeAttr(project.path)}">
+        <span class="list-icon codicon codicon-${project.pathExists ? "folder" : "folder-unopened"}"></span>
+        <span class="stats-copy">
+          <span class="stats-title-line">
+            <span class="list-name">${escapeHtml(project.name)}</span>
+            <span class="stats-total" title="${formatExactTokenCount(project.totalTokens)}">${formatTokenCount(project.totalTokens)}</span>
+          </span>
+          <span class="list-meta">${escapeHtml(project.path || text("webview.noProjectPath"))}</span>
+          <span class="stats-bar" aria-hidden="true"><span style="width:${barWidth.toFixed(1)}%"></span></span>
+          <span class="list-meta">${text("webview.conversationTokens", { count: project.conversationCount, tokens: formatTokenCount(project.averageTokens) })} - ${project.lastActive ? formatRelative(project.lastActive) : text("webview.noRecentActivity")} - ${text("webview.tokenShare", { percent: percent.toFixed(1) })}</span>
+          <span class="list-meta">${text("webview.tokenBreakdown", { input: formatTokenCount(project.inputTokens), output: formatTokenCount(project.outputTokens), reasoning: formatTokenCount(project.reasoningOutputTokens) })}</span>
+        </span>
+      </button>
+    `;
+  }
+
+  function aggregateProjectTokens(projects) {
+    return projects.map(project => {
+      const conversations = project.conversations || [];
+      const measured = conversations.filter(conversation => conversation.tokenUsage);
+      const totalTokens = conversations.reduce((sum, conversation) => sum + (conversation.tokenUsage?.totalTokens || 0), 0);
+      const lastActiveMs = conversations.reduce((latest, conversation) => {
+        const updatedAt = timestampMs(conversation.updatedAt);
+        const createdAt = timestampMs(conversation.createdAt);
+        return Math.max(latest, updatedAt, createdAt);
+      }, 0);
+      return {
+        name: project.name,
+        path: project.path,
+        pathExists: project.pathExists,
+        conversationCount: conversations.length,
+        measuredConversationCount: measured.length,
+        totalTokens,
+        averageTokens: measured.length ? totalTokens / measured.length : 0,
+        inputTokens: measured.reduce((sum, conversation) => sum + (conversation.tokenUsage?.inputTokens || 0), 0),
+        outputTokens: measured.reduce((sum, conversation) => sum + (conversation.tokenUsage?.outputTokens || 0), 0),
+        reasoningOutputTokens: measured.reduce((sum, conversation) => sum + (conversation.tokenUsage?.reasoningOutputTokens || 0), 0),
+        lastActive: lastActiveMs ? new Date(lastActiveMs).toISOString() : project.lastConversationAt,
+      };
+    }).sort((first, second) => {
+      if (second.totalTokens !== first.totalTokens) return second.totalTokens - first.totalTokens;
+      return second.conversationCount - first.conversationCount;
+    });
+  }
+
+  function timestampMs(value) {
+    const date = new Date(value);
+    return Number.isNaN(date.valueOf()) ? 0 : date.valueOf();
   }
 
   function renderConversations(project, index) {
@@ -97,8 +193,8 @@
     return `<label class="search"><span class="codicon codicon-search"></span><input id="search" value="${escapeAttr(query)}" placeholder="${escapeAttr(placeholder)}" aria-label="${escapeAttr(placeholder)}"></label>`;
   }
 
-  function iconButton(iconName, label, id) {
-    return `<button id="${id}" class="icon-button" type="button" aria-label="${escapeAttr(label)}"><span class="codicon codicon-${iconName}"></span></button>`;
+  function iconButton(iconName, label, id, pressed = false) {
+    return `<button id="${id}" class="icon-button" type="button" aria-label="${escapeAttr(label)}"${pressed ? ` title="${escapeAttr(label)}" aria-pressed="true"` : ""}><span class="codicon codicon-${iconName}"></span></button>`;
   }
 
   function bindSidebarEvents() {
@@ -122,7 +218,17 @@
     });
     root.querySelector("#choose-folder")?.addEventListener("click", () => post("chooseFolder"));
     root.querySelector("#refresh")?.addEventListener("click", () => post("refresh"));
+    root.querySelector("#project-token-stats")?.addEventListener("click", () => {
+      statsVisible = true;
+      query = "";
+      renderSidebar();
+    });
     root.querySelector("#diagnostic")?.addEventListener("click", () => post("showDiagnostic"));
+    root.querySelector("#back-stats")?.addEventListener("click", () => {
+      statsVisible = false;
+      query = "";
+      renderSidebar();
+    });
     root.querySelector("#back-projects")?.addEventListener("click", () => {
       query = "";
       post("showProjects");
@@ -131,6 +237,7 @@
     root.querySelector("#new-codex")?.addEventListener("click", () => post("openCodex", { mode: "new" }));
     root.querySelectorAll("[data-project-path]").forEach(button => {
       button.addEventListener("click", () => {
+        statsVisible = false;
         query = "";
         post("selectProject", { projectPath: button.dataset.projectPath });
       });
@@ -246,6 +353,18 @@
 
   function formatCount(count, key) {
     return text(key, { count });
+  }
+
+  function formatTokenCount(value) {
+    const count = Math.max(0, Number(value) || 0);
+    return new Intl.NumberFormat(locale, {
+      notation: "compact",
+      maximumFractionDigits: count < 10_000 ? 0 : 1,
+    }).format(Math.round(count));
+  }
+
+  function formatExactTokenCount(value) {
+    return new Intl.NumberFormat(locale).format(Math.round(Math.max(0, Number(value) || 0)));
   }
 
   function text(key, values = {}) {

@@ -8,6 +8,8 @@ CodexChat 是 OpenAI Codex VS Code 扩展的本地会话伴生管理器。它读
 - 按项目文件夹浏览本地 Codex 会话。
 - 查看用户消息、Codex 回复和工具调用摘要。
 - 监听本地会话变化并刷新。
+- 汇总每个项目的 Codex Token 使用量、平均会话消耗和输入/输出/推理拆分。
+- 仅展示当前仍存在的项目路径，已删除路径不会计入 Token 统计。
 - 打开项目工作区并进入官方 Codex 扩展。
 - 在经过验证的 Codex 版本中恢复指定本地会话。
 - Codex 原始会话文件全程只读。
@@ -18,6 +20,7 @@ CodexChat 是 OpenAI Codex VS Code 扩展的本地会话伴生管理器。它读
 2. 从自动识别的项目中选择一个项目，或使用文件夹选择器添加项目。
 3. 点击会话查看只读内容。
 4. 点击“进入 Codex”开始工作，或点击会话右侧的继续按钮恢复历史会话。
+5. 点击工具栏中的统计图标查看按项目汇总的 Token 使用情况。
 
 默认数据目录为当前用户目录下的 `.codex`。可通过 `codexChat.codexHome` 设置覆盖。
 
@@ -57,6 +60,8 @@ CodexChat is a local session companion manager for the OpenAI Codex VS Code exte
 - Browses local Codex conversations by project folder.
 - Displays user messages, Codex responses, and tool-call summaries.
 - Watches local session changes and refreshes automatically.
+- Summarizes Codex token usage by project, including average conversation usage and input/output/reasoning breakdowns.
+- Shows only project paths that still exist, excluding deleted paths from token totals.
 - Opens the project workspace and enters the official Codex extension.
 - Restores a selected local conversation in verified Codex versions.
 - Keeps original Codex session files read-only throughout the workflow.
@@ -67,6 +72,7 @@ CodexChat is a local session companion manager for the OpenAI Codex VS Code exte
 2. Select a project from the automatically detected projects, or add one with the folder picker.
 3. Click a conversation to view its read-only content.
 4. Click "Enter Codex" to start working, or click the continue button beside a conversation to resume a historical session.
+5. Click the toolbar stats icon to review project-level token usage.
 
 The default data directory is `.codex` under the current user's home directory. You can override it with the `codexChat.codexHome` setting.
 

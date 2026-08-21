@@ -1,3 +1,12 @@
+export interface TokenUsageSummary {
+  inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
+  outputTokens: number;
+  reasoningOutputTokens: number;
+  totalTokens: number;
+}
+
 export interface ConversationSummary {
   id: string;
   projectId: string;
@@ -10,6 +19,7 @@ export interface ConversationSummary {
   fileSize: number;
   fileModifiedAt: string;
   sourceVersion?: string;
+  tokenUsage?: TokenUsageSummary;
 }
 
 export interface ProjectSummary {

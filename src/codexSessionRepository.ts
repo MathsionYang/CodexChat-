@@ -9,6 +9,7 @@ import {
   CustomProject,
   ProjectSummary,
   SessionIndex,
+  TokenUsageSummary,
 } from "./models";
 import { formatDate, Locale, localize } from "./i18n";
 import { normalizeProjectPath, projectIdForPath, projectNameForPath } from "./pathUtils";
@@ -49,14 +50,15 @@ export class CodexSessionRepository {
 
     const homeExists = await pathExists(this.codexHome);
     if (!homeExists) {
+      const projects = await this.createCustomProjects(options.customProjects ?? []);
       return {
-        projects: this.createCustomProjects(options.customProjects ?? []),
+        projects,
         conversations: [],
         diagnostic: {
           codexHome: this.codexHome,
           scannedAt,
           conversationCount: 0,
-          projectCount: options.customProjects?.length ?? 0,
+          projectCount: projects.length,
           failedFileCount: 0,
           warnings: [localize(this.locale, "repository.homeMissing", { codexHome: this.codexHome })],
         },
@@ -94,7 +96,8 @@ export class CodexSessionRepository {
       }
     }
 
-    const conversations = [...byId.values()].sort(compareConversationUpdatedDescending);
+    const conversations = (await filterExistingProjectConversations([...byId.values()]))
+      .sort(compareConversationUpdatedDescending);
     const projects = await this.buildProjects(conversations, options.customProjects ?? []);
     return {
       projects,
@@ -210,8 +213,12 @@ export class CodexSessionRepository {
       return undefined;
     }
 
-    const stats = await fsPromises.stat(filePath);
     const indexed = titles.get(meta.id);
+    const [stats, title, tokenUsage] = await Promise.all([
+      fsPromises.stat(filePath),
+      indexed?.title ? Promise.resolve(indexed.title) : readFirstUserMessage(filePath),
+      readTokenUsage(filePath),
+    ]);
     const projectPath = meta.cwd ? path.resolve(meta.cwd) : "";
     const projectId = projectIdForPath(projectPath);
     const createdAt = meta.createdAt || stats.birthtime.toISOString();
@@ -221,13 +228,14 @@ export class CodexSessionRepository {
       projectId,
       projectPath,
       filePath,
-      title: indexed?.title || (await readFirstUserMessage(filePath)) || fallbackTitle(meta.id, createdAt, this.locale),
+      title: title || fallbackTitle(meta.id, createdAt, this.locale),
       createdAt,
       updatedAt,
       archived,
       fileSize: stats.size,
       fileModifiedAt: stats.mtime.toISOString(),
       sourceVersion: meta.sourceVersion,
+      tokenUsage,
     };
   }
 
@@ -237,6 +245,10 @@ export class CodexSessionRepository {
   ): Promise<ProjectSummary[]> {
     const projects = new Map<string, ProjectSummary>();
     for (const conversation of conversations) {
+      const projectPath = conversation.projectPath;
+      if (!projectPath || !(await pathExists(projectPath))) {
+        continue;
+      }
       const project = projects.get(conversation.projectId);
       if (project) {
         project.conversations.push(conversation);
@@ -245,7 +257,6 @@ export class CodexSessionRepository {
         continue;
       }
 
-      const projectPath = conversation.projectPath;
       projects.set(conversation.projectId, {
         id: conversation.projectId,
         name: projectPath ? projectNameForPath(projectPath, localize(this.locale, "repository.uncategorizedProject")) : localize(this.locale, "repository.uncategorizedProject"),
@@ -253,7 +264,7 @@ export class CodexSessionRepository {
         normalizedPath: normalizeProjectPath(projectPath),
         firstConversationAt: conversation.createdAt,
         lastConversationAt: conversation.updatedAt,
-        pathExists: projectPath ? await pathExists(projectPath) : false,
+        pathExists: true,
         custom: false,
         conversations: [conversation],
       });
@@ -268,6 +279,9 @@ export class CodexSessionRepository {
       if (projects.has(id)) {
         continue;
       }
+      if (!(await pathExists(custom.path))) {
+        continue;
+      }
       projects.set(id, {
         id,
         name: projectNameForPath(custom.path, localize(this.locale, "repository.uncategorizedProject")),
@@ -275,7 +289,7 @@ export class CodexSessionRepository {
         normalizedPath: normalized,
         firstConversationAt: custom.addedAt,
         lastConversationAt: custom.addedAt,
-        pathExists: await pathExists(custom.path),
+        pathExists: true,
         custom: true,
         conversations: [],
       });
@@ -286,19 +300,48 @@ export class CodexSessionRepository {
       .sort((first, second) => compareDates(second.lastConversationAt, first.lastConversationAt));
   }
 
-  private createCustomProjects(customProjects: CustomProject[]): ProjectSummary[] {
-    return customProjects.map(custom => ({
-      id: projectIdForPath(custom.path),
-      name: projectNameForPath(custom.path, localize(this.locale, "repository.uncategorizedProject")),
-      path: path.resolve(custom.path),
-      normalizedPath: normalizeProjectPath(custom.path),
-      firstConversationAt: custom.addedAt,
-      lastConversationAt: custom.addedAt,
-      pathExists: false,
-      custom: true,
-      conversations: [],
-    }));
+  private async createCustomProjects(customProjects: CustomProject[]): Promise<ProjectSummary[]> {
+    const projects: ProjectSummary[] = [];
+    for (const custom of customProjects) {
+      const normalized = normalizeProjectPath(custom.path);
+      if (!normalized || !(await pathExists(custom.path))) {
+        continue;
+      }
+      projects.push({
+        id: projectIdForPath(custom.path),
+        name: projectNameForPath(custom.path, localize(this.locale, "repository.uncategorizedProject")),
+        path: path.resolve(custom.path),
+        normalizedPath: normalized,
+        firstConversationAt: custom.addedAt,
+        lastConversationAt: custom.addedAt,
+        pathExists: true,
+        custom: true,
+        conversations: [],
+      });
+    }
+    return projects;
   }
+}
+
+async function filterExistingProjectConversations(
+  conversations: ConversationSummary[],
+): Promise<ConversationSummary[]> {
+  const existsByProject = new Map<string, boolean>();
+  const visible: ConversationSummary[] = [];
+  for (const conversation of conversations) {
+    if (!conversation.projectPath) {
+      continue;
+    }
+    let projectExists = existsByProject.get(conversation.projectId);
+    if (projectExists === undefined) {
+      projectExists = await pathExists(conversation.projectPath);
+      existsByProject.set(conversation.projectId, projectExists);
+    }
+    if (projectExists) {
+      visible.push(conversation);
+    }
+  }
+  return visible;
 }
 
 async function collectJsonlFiles(directory: string): Promise<string[]> {
@@ -403,6 +446,59 @@ async function readFirstUserMessage(filePath: string): Promise<string | undefine
     stream.destroy();
   }
   return undefined;
+}
+
+async function readTokenUsage(filePath: string): Promise<TokenUsageSummary | undefined> {
+  const stream = fs.createReadStream(filePath, { encoding: "utf8" });
+  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  let latest: TokenUsageSummary | undefined;
+  try {
+    for await (const line of lines) {
+      if (!line.trim()) {
+        continue;
+      }
+      try {
+        const record = JSON.parse(line) as unknown;
+        const usage = parseTotalTokenUsage(record);
+        if (usage) {
+          latest = usage;
+        }
+      } catch {
+        // A partially written tail line should not discard earlier token snapshots.
+      }
+    }
+  } finally {
+    lines.close();
+    stream.destroy();
+  }
+  return latest;
+}
+
+function parseTotalTokenUsage(record: unknown): TokenUsageSummary | undefined {
+  if (!isRecord(record) || record.type !== "event_msg") {
+    return undefined;
+  }
+  const payload = isRecord(record.payload) ? record.payload : undefined;
+  if (!payload || payload.type !== "token_count") {
+    return undefined;
+  }
+  const info = isRecord(payload.info) ? payload.info : undefined;
+  const usage = info && isRecord(info.total_token_usage) ? info.total_token_usage : undefined;
+  if (!usage) {
+    return undefined;
+  }
+  const totalTokens = asNonNegativeNumber(usage.total_tokens);
+  if (totalTokens === undefined) {
+    return undefined;
+  }
+  return {
+    inputTokens: asNonNegativeNumber(usage.input_tokens) ?? 0,
+    cachedInputTokens: asNonNegativeNumber(usage.cached_input_tokens) ?? 0,
+    cacheWriteInputTokens: asNonNegativeNumber(usage.cache_write_input_tokens) ?? 0,
+    outputTokens: asNonNegativeNumber(usage.output_tokens) ?? 0,
+    reasoningOutputTokens: asNonNegativeNumber(usage.reasoning_output_tokens) ?? 0,
+    totalTokens,
+  };
 }
 
 function parseConversationRecord(
@@ -547,6 +643,10 @@ function asNonEmptyString(value: unknown): string | undefined {
 function asIsoString(value: unknown): string | undefined {
   const text = asNonEmptyString(value);
   return text && !Number.isNaN(Date.parse(text)) ? new Date(text).toISOString() : undefined;
+}
+
+function asNonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

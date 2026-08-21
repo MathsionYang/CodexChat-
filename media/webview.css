@@ -89,6 +89,11 @@ input:focus-visible {
   background: var(--cc-hover);
 }
 
+.icon-button[aria-pressed="true"] {
+  color: var(--cc-active-text);
+  background: var(--cc-active);
+}
+
 .search {
   display: flex;
   height: 28px;
@@ -190,6 +195,95 @@ input:focus-visible {
 .list-count {
   color: var(--cc-muted);
   font-size: 11px;
+}
+
+.stats-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 8px;
+}
+
+.stat-card {
+  min-width: 0;
+  padding: 8px;
+  background: var(--vscode-editorWidget-background, var(--vscode-input-background));
+  border: 1px solid var(--cc-border);
+  border-radius: 4px;
+}
+
+.stat-card span,
+.stat-card strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stat-card span {
+  color: var(--cc-muted);
+  font-size: 10px;
+}
+
+.stat-card strong {
+  margin-top: 4px;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-list {
+  padding-bottom: 8px;
+}
+
+.stats-row {
+  display: grid;
+  width: 100%;
+  min-height: 74px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  padding: 8px 9px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.stats-row:hover {
+  background: var(--cc-hover);
+}
+
+.stats-copy {
+  min-width: 0;
+}
+
+.stats-title-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.stats-total {
+  color: var(--vscode-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.stats-bar {
+  display: block;
+  height: 5px;
+  margin: 6px 0;
+  overflow: hidden;
+  background: var(--vscode-editorGroupHeader-tabsBackground, var(--vscode-input-background));
+  border-radius: 999px;
+}
+
+.stats-bar span {
+  display: block;
+  height: 100%;
+  background: var(--vscode-focusBorder);
+  border-radius: inherit;
 }
 
 .project-head {
