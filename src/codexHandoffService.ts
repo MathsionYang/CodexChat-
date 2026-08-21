@@ -3,11 +3,11 @@ import * as vscode from "vscode";
 import { PendingHandoff } from "./models";
 import { pathsEqual } from "./pathUtils";
 import { Locale, localize } from "./i18n";
+import { shouldAttemptDirectSessionRestore } from "./codexHandoffPolicy";
 
 const PENDING_HANDOFF_KEY = "codexChat.pendingHandoff";
 const PENDING_MAX_AGE_MILLISECONDS = 2 * 60 * 1_000;
 const CODEX_EXTENSION_ID = "openai.chatgpt";
-const VERIFIED_ROUTE_VERSION_PREFIXES = ["26.814."];
 
 export class CodexHandoffService {
   public constructor(
@@ -112,12 +112,10 @@ export class CodexHandoffService {
   private async tryOpenConversation(version: unknown, sessionId: string): Promise<void> {
     const enabled = vscode.workspace.getConfiguration("codexChat")
       .get<boolean>("enableExperimentalSessionHandoff", true);
-    const versionText = typeof version === "string" ? version : localize(this.locale, "common.unknown");
-    const supported = VERIFIED_ROUTE_VERSION_PREFIXES.some(prefix => typeof version === "string" && version.startsWith(prefix));
-    if (!enabled || !supported) {
+    if (!shouldAttemptDirectSessionRestore(enabled, version)) {
       await vscode.env.clipboard.writeText(sessionId);
       void vscode.window.showWarningMessage(
-        localize(this.locale, "handoff.unverifiedSessionRestore", { version: versionText }),
+        localize(this.locale, "handoff.sessionRestoreDisabled"),
       );
       return;
     }

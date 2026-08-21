@@ -2,7 +2,7 @@
   "name": "codexchat",
   "displayName": "%manifest.displayName%",
   "description": "%manifest.description%",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "MathsionYang",
   "icon": "codexchat-icon-b-terminal.png",
   "license": "MIT",

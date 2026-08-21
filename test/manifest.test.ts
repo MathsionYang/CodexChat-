@@ -17,6 +17,10 @@ test("uses color branding icon and monochrome activity bar icon", () => {
   assert.equal(manifest.description, "%manifest.description%");
   assert.equal(manifest.contributes.views.codexChatContainer[0].name, "%manifest.view.projectSessions%");
   assert.equal(manifest.contributes.commands[0].title, "%command.refresh%");
+  assert.equal(
+    manifest.contributes.configuration.properties["codexChat.enableExperimentalSessionHandoff"].default,
+    true,
+  );
   assert.equal(existsSync(path.join(projectRoot, "package.nls.json")), true);
   assert.equal(existsSync(path.join(projectRoot, "package.nls.zh-cn.json")), true);
   assert.equal(existsSync(path.join(projectRoot, "package.nls.en.json")), true);

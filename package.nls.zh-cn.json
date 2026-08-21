@@ -8,6 +8,6 @@
   "command.openSettings": "打开设置",
   "config.codexHome": "Codex 数据目录。留空时使用当前用户目录下的 `.codex` 文件夹。",
   "config.includeArchivedSessions": "在项目会话中包含 `archived_sessions` 下的归档会话。",
-  "config.enableExperimentalSessionHandoff": "允许经过验证的 Codex 扩展版本通过本地会话路由恢复历史会话。",
+  "config.enableExperimentalSessionHandoff": "允许 CodexChat 尝试通过本地会话路由恢复历史会话。",
   "config.confirmWorkspaceSwitch": "打开另一个项目的 Codex 前，先确认切换 VS Code 工作区。"
 }
