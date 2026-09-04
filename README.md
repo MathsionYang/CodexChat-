@@ -6,7 +6,7 @@ Current version: **0.1.6**
 
 You can install it by searching **"CodexChat"** in the VS Code Marketplace.
 
-Repository: <https://github.com/MathsionYang/CodexChat->
+Repository: [GitHub](https://github.com/MathsionYang/CodexChat-)
 
 ## Why CodexChat
 
@@ -125,6 +125,13 @@ npm.cmd run package
 
 Press `F5` in VS Code to launch the Extension Development Host.
 
+## Project Notes
+
+- `doc/需求文档.md` - product requirements and scope.
+- `doc/进入Codex扩展设计.md` - Codex handoff design notes.
+- `doc/项目时间统计-原型设计.md` - time statistics prototype plan.
+- `doc/项目时间统计-原型.html` - standalone prototype preview.
+
 ## What CodexChat Is Not
 
 - It is not a replacement chat client.
@@ -142,7 +149,7 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 你可以直接在 VS Code 应用商店搜索 **"CodexChat"** 安装。
 
-仓库地址：<https://github.com/MathsionYang/CodexChat->
+仓库地址：[GitHub](https://github.com/MathsionYang/CodexChat-)
 
 ## 解决什么痛点
 
@@ -260,6 +267,13 @@ npm.cmd run package
 ```
 
 在 VS Code 中按 `F5` 可启动 Extension Development Host。
+
+## 项目文档
+
+- `doc/需求文档.md` - 产品需求与范围说明。
+- `doc/进入Codex扩展设计.md` - 进入 Codex 的交互设计。
+- `doc/项目时间统计-原型设计.md` - 时间统计原型方案。
+- `doc/项目时间统计-原型.html` - 独立原型预览。
 
 ## CodexChat 不是什么
 

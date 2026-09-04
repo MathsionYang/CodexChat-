@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodexChat · 项目时间统计原型（Mock 数据驱动）</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/microsoft/vscode-codicons@main/dist/codicon.css">
+  <style>
+    :root {
+      color-scheme: light dark;
+
+      /* —— VSCode Theme Tokens (与 media/webview.css 保持一致) —— */
+      --cc-border: var(--vscode-panel-border, var(--vscode-widget-border, #3f3f46));
+      --cc-muted: var(--vscode-descriptionForeground, #8b8b8b);
+      --cc-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+      --cc-active: var(--vscode-list-activeSelectionBackground, #094771);
+      --cc-active-text: var(--vscode-list-activeSelectionForeground, #ffffff);
+
+      --stat-primary: var(--vscode-focusBorder, #007acc);
+      --stat-bg-elev: var(--vscode-editorWidget-background, #252526);
+      --stat-bg-stripe: var(--vscode-editorGroupHeader-tabsBackground, #2d2d2d);
+      --stat-good: #4ec9b0;
+      --stat-warn: #d7ba7d;
+      --stat-bad: #f48771;
+      --stat-info: #569cd6;
+
+      --p-1: #4ec9b0; --p-2: #569cd6; --p-3: #c586c0; --p-4: #dcdcaa;
+      --p-5: #9cdcfe; --p-6: #ce9178; --p-7: #b5cea8; --p-8: #d7ba7d;
+      --p-9: #e8ab53; --p-10: #86a5ba;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--vscode-foreground, #d4d4d4);
+      background: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+      font-family: var(--vscode-font-family, "Segoe WPC", "Segoe UI", system-ui, sans-serif);
+      font-size: var(--vscode-font-size, 13px);
+      line-height: 1.5;
+    }
+    code { font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: 11px; }
+
+    /* —— 工具栏 —— */
+    .toolbar {
+      display: flex; align-items: center; gap: 4px; padding: 7px 8px;
+      border-bottom: 1px solid var(--cc-border); position: sticky; top: 0;
+      background: inherit; z-index: 5;
+    }
+    .toolbar-title { min-width: 0; flex: 1; overflow: hidden; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .icon-button {
+      display: inline-grid; width: 26px; height: 26px; padding: 0; place-items: center;
+      background: transparent; border: 0; border-radius: 3px; color: inherit;
+    }
+    .icon-button:hover { background: var(--cc-hover); }
+    .icon-button.is-new { position: relative; color: var(--stat-primary); }
+    .icon-button.is-new::after {
+      content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--stat-good);
+      box-shadow: 0 0 0 2px var(--vscode-sideBar-background, #1e1e1e);
+    }
+    .icon-button[aria-pressed="true"] { background: var(--cc-active); color: var(--cc-active-text); }
+
+    /* —— 顶部筛选行 —— */
+    .filters {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 12px;
+      border-bottom: 1px solid var(--cc-border); background: var(--stat-bg-stripe);
+    }
+    .seg { display: inline-flex; border: 1px solid var(--cc-border); border-radius: 3px; overflow: hidden; }
+    .seg button { padding: 4px 10px; background: transparent; border: 0; color: inherit; font: inherit; cursor: pointer; }
+    .seg button + button { border-left: 1px solid var(--cc-border); }
+    .seg button[aria-pressed="true"] { background: var(--cc-active); color: var(--cc-active-text); }
+    .filters .grow { flex: 1; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
+      border: 1px solid var(--cc-border); border-radius: 999px; font-size: 11px; color: var(--cc-muted);
+    }
+    .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--stat-good); }
+
+    main { width: min(1100px, calc(100% - 24px)); margin: 0 auto; padding: 18px 0 64px; }
+
+    h2.section-title {
+      margin: 28px 0 10px; font-size: 12px; font-weight: 700;
+      letter-spacing: 0.04em; text-transform: uppercase; color: var(--cc-muted);
+    }
+
+    /* —— KPI 卡片（紧凑版） —— */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .kpi { padding: 8px 11px; border: 1px solid var(--cc-border); border-radius: 4px; background: var(--stat-bg-elev); }
+    .kpi-label {
+      display: flex; align-items: center; gap: 5px; color: var(--cc-muted);
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .kpi-value { margin-top: 4px; font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+    .kpi-unit { margin-left: 3px; font-size: 11px; font-weight: 400; color: var(--cc-muted); }
+    .kpi-foot { margin-top: 3px; color: var(--cc-muted); font-size: 10px; }
+    .kpi-foot .up { color: var(--stat-good); }
+    .kpi-foot .down { color: var(--stat-bad); }
+
+    /* —— 图表卡片通用 —— */
+    .chart-grid { display: grid; gap: 10px; }
+    .chart-grid.cols-2 { grid-template-columns: 1.6fr 1fr; }
+    @media (max-width: 920px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .chart-grid.cols-2 { grid-template-columns: 1fr; }
+    }
+    .card { border: 1px solid var(--cc-border); border-radius: 4px; background: var(--stat-bg-elev); display: flex; flex-direction: column; }
+    .card-head {
+      display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--cc-border);
+    }
+    .card-head h3 { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--cc-muted); flex: 1; }
+    .card-head .hint { color: var(--cc-muted); font-size: 11px; }
+    .card-body { padding: 12px; }
+    .card-body.tight { padding: 8px 12px 12px; }
+
+    /* —— 横向条形图 —— */
+    .hbar { display: flex; flex-direction: column; gap: 6px; }
+    .hbar-row { display: grid; grid-template-columns: 150px 1fr 72px; align-items: center; gap: 10px; }
+    .hbar-row .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+    .hbar-row .name small { color: var(--cc-muted); font-weight: 400; }
+    .hbar-track { height: 18px; border: 1px solid var(--cc-border); border-radius: 2px; overflow: hidden; }
+    .hbar-fill {
+      height: 100%; display: flex; align-items: center; padding: 0 6px; font-size: 11px;
+      color: rgba(0,0,0,0.78); white-space: nowrap; font-variant-numeric: tabular-nums;
+    }
+    .hbar-row .value { color: var(--cc-muted); font-variant-numeric: tabular-nums; font-size: 12px; text-align: right; }
+
+    /* —— 环形占比 —— */
+    .donut-wrap { display: grid; grid-template-columns: 190px 1fr; gap: 14px; align-items: center; }
+    @media (max-width: 720px) { .donut-wrap { grid-template-columns: 1fr; } }
+    .donut { position: relative; width: 190px; height: 190px; margin: 0 auto; }
+    .donut-center {
+      position: absolute; inset: 0; display: grid; place-items: center; text-align: center; pointer-events: none;
+    }
+    .donut-center strong { display: block; font-size: 21px; font-variant-numeric: tabular-nums; }
+    .donut-center span { color: var(--cc-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .legend { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .legend-row .swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+    .legend-row .lname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .legend-row .lval { color: var(--cc-muted); font-variant-numeric: tabular-nums; }
+
+    /* —— 趋势线 —— */
+    .trend-svg { width: 100%; height: 220px; display: block; }
+    .trend-legend { display: flex; gap: 14px; padding: 4px 2px 0; color: var(--cc-muted); font-size: 11px; }
+    .trend-legend .swatch { display: inline-block; width: 10px; height: 2px; margin-right: 4px; vertical-align: middle; }
+
+    /* —— 热力图（12 周 × 7 天） —— */
+    .heatmap { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; }
+    .heatmap .cell { aspect-ratio: 1 / 1; border-radius: 2px; background: var(--stat-bg-stripe); cursor: default; }
+    .heatmap-months {
+      display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px;
+      color: var(--cc-muted); font-size: 10px; margin-bottom: 4px;
+    }
+    .heatmap-months span { white-space: nowrap; }
+    .heatmap-legend {
+      display: flex; align-items: center; gap: 4px; margin-top: 10px;
+      color: var(--cc-muted); font-size: 11px; justify-content: flex-end;
+    }
+    .heatmap-legend .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+    /* —— 项目明细表 —— */
+    table.detail { width: 100%; border-collapse: collapse; font-size: 12px; }
+    table.detail th, table.detail td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--cc-border); font-variant-numeric: tabular-nums; }
+    table.detail th {
+      color: var(--cc-muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; background: var(--stat-bg-stripe);
+    }
+    table.detail tr:hover td { background: var(--cc-hover); }
+    table.detail td.num { text-align: right; color: var(--cc-muted); }
+    table.detail td .bar-mini {
+      display: inline-block; width: 56px; height: 6px; vertical-align: middle; margin-right: 6px;
+      border-radius: 3px; background: var(--stat-bg-stripe); position: relative;
+    }
+    table.detail td .bar-mini i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--stat-primary); }
+    table.detail .name-cell { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    table.detail .path-cell { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cc-muted); font-size: 11px; }
+
+    /* —— 调用注释 —— */
+    .notes { margin-top: 24px; padding: 12px 14px; border: 1px dashed var(--cc-border); border-radius: 4px; color: var(--cc-muted); font-size: 12px; background: var(--stat-bg-stripe); }
+    .notes strong { color: var(--vscode-foreground, #d4d4d4); }
+    .notes ul { margin: 6px 0 0; padding-left: 18px; }
+    .notes li { margin: 2px 0; }
+
+    .empty { display: grid; place-items: center; padding: 32px; color: var(--cc-muted); gap: 8px; text-align: center; }
+
+    @media (max-width: 540px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .hbar-row { grid-template-columns: 100px 1fr 60px; }
+    }
+  </style>
+</head>
+<body data-view="stats-prototype">
+
+  <!-- —— 工具栏（沿用现有 CodexChat 风格，新增"统计"按钮高亮） —— -->
+  <header class="toolbar" role="toolbar" aria-label="CodexChat 工具栏">
+    <button class="icon-button" id="back" type="button" aria-label="返回项目列表" title="返回项目列表">
+      <span class="codicon codicon-arrow-left"></span>
+    </button>
+    <span class="toolbar-title">项目时间统计</span>
+    <button class="icon-button" type="button" aria-label="选择项目文件夹" title="选择项目文件夹"><span class="codicon codicon-folder-opened"></span></button>
+    <button class="icon-button" type="button" aria-label="刷新" title="刷新"><span class="codicon codicon-refresh"></span></button>
+    <button class="icon-button is-new" type="button" aria-label="时间统计" title="时间统计（新增）" aria-pressed="true"><span class="codicon codicon-graph"></span></button>
+    <button class="icon-button" type="button" aria-label="诊断信息" title="诊断信息"><span class="codicon codicon-info"></span></button>
+  </header>
+
+  <!-- —— 范围筛选（真实生效） —— -->
+  <div class="filters">
+    <div class="seg" role="tablist" aria-label="时间范围" id="range-seg">
+      <button type="button" data-range="1">今日</button>
+      <button type="button" data-range="7" aria-pressed="true">近 7 天</button>
+      <button type="button" data-range="30">近 30 天</button>
+      <button type="button" data-range="Infinity">全部</button>
+    </div>
+    <div class="grow"></div>
+    <span class="pill"><span class="dot"></span><span id="pill-text">已聚合 0 个项目，0 段会话</span></span>
+  </div>
+
+  <main>
+    <h2 class="section-title">关键指标</h2>
+    <section class="kpi-grid" aria-label="关键指标" id="kpi-grid"></section>
+
+    <h2 class="section-title">项目维度</h2>
+    <section class="chart-grid cols-2">
+      <article class="card">
+        <div class="card-head"><h3>各项目累计时长</h3><span class="hint">单位：小时</span></div>
+        <div class="card-body tight"><div class="hbar" id="hbar"></div></div>
+      </article>
+      <article class="card">
+        <div class="card-head"><h3>时间占比 Top 6</h3><span class="hint">占比 = 项目时长 / 汇总时长</span></div>
+        <div class="card-body tight">
+          <div class="donut-wrap">
+            <div class="donut">
+              <svg viewBox="0 0 42 42" width="190" height="190" id="donut" aria-label="项目时间占比"></svg>
+              <div class="donut-center"><div><strong id="donut-total">0h</strong><span>总时长</span></div></div>
+            </div>
+            <div class="legend" id="legend"></div>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <h2 class="section-title">时间维度（固定窗口）</h2>
+    <section class="chart-grid cols-2">
+      <article class="card">
+        <div class="card-head"><h3>近 30 天对话与时长趋势</h3><span class="hint">柱：会话数；线：累计时长(h)</span></div>
+        <div class="card-body trend-wrap">
+          <svg class="trend-svg" viewBox="0 0 600 220" id="trend" aria-label="30 天趋势"></svg>
+          <div class="trend-legend">
+            <span><span class="swatch" style="background:var(--stat-primary)"></span>会话数</span>
+            <span><span class="swatch" style="background:var(--stat-warn)"></span>累计时长 (h)</span>
+          </div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="card-head"><h3>近 12 周活动热力图</h3><span class="hint">每格 = 一天，颜色越深会话越多</span></div>
+        <div class="card-body tight">
+          <div class="heatmap-months" id="heat-months"></div>
+          <div class="heatmap" id="heatmap" role="grid" aria-label="活动热力图"></div>
+          <div class="heatmap-legend">
+            <span>少</span>
+            <span class="swatch" style="background:var(--stat-bg-stripe)"></span>
+            <span class="swatch" style="background:#1f4f3a"></span>
+            <span class="swatch" style="background:#2e7d5b"></span>
+            <span class="swatch" style="background:#3fa679"></span>
+            <span class="swatch" style="background:#52d29a"></span>
+            <span>多</span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <h2 class="section-title">项目明细</h2>
+    <article class="card">
+      <div class="card-head"><h3>每个项目的会话与时长统计</h3><span class="hint">点击项目行可跳转回主列表选中该项目</span></div>
+      <div style="overflow:auto">
+        <table class="detail" aria-label="项目明细">
+          <thead>
+            <tr>
+              <th>项目</th><th>路径</th><th class="num">会话数</th>
+              <th class="num">总时长</th><th class="num">平均时长</th><th class="num">最近活跃</th><th class="num">占比</th>
+            </tr>
+          </thead>
+          <tbody id="detail-body"></tbody>
+        </table>
+      </div>
+    </article>
+
+    <div class="notes">
+      <strong>原型说明（Mock 数据驱动）</strong>
+      <ul>
+        <li>数据结构严格对齐 <code>models.ts</code>：<code>SessionIndex → projects[].conversations[]</code>，每个会话含 <code>createdAt / updatedAt / title</code>。</li>
+        <li>「时长」由聚合函数计算：<code>updatedAt − createdAt</code>（真实实现用 <code>entries[].createdAt</code> 首末差，更精确）。</li>
+        <li>所有图表、KPI、筛选、占比均由同一份 mock 数据聚合而成，无任何写死的 <code>totalHours</code>。</li>
+        <li>顶部「今日 / 7 天 / 30 天 / 全部」筛选真实生效，会重新聚合并重绘 KPI / 条形图 / 环形图 / 明细表。</li>
+        <li>趋势图、热力图是固定窗口的时间序列（近 30 天 / 近 12 周），不随筛选变化。</li>
+      </ul>
+    </div>
+  </main>
+
+  <script>
+  // ===================================================================
+  //  1. Mock 数据：对齐 models.ts 的真实结构
+  //     SessionIndex { projects: ProjectSummary[] }
+  //     ProjectSummary { name, path, conversations: ConversationSummary[] }
+  //     ConversationSummary { id, title, createdAt, updatedAt }
+  // ===================================================================
+
+  // 确定性伪随机（保证每次打开数据一致、可复现）
+  function det(seed) {
+    const x = Math.sin(seed) * 10000;
+    return x - Math.floor(x);
+  }
+  // 生成 n 天前、指定小时的 ISO 时间戳
+  function ts(daysAgo, hour, minute = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    d.setHours(hour, minute, 0, 0);
+    return d.toISOString();
+  }
+
+  // 原始描述：每个项目给一组会话标题，时间分布由 det() 确定性生成
+  const MOCK_RAW = [
+    { name: "AIDeepMAIC", path: "D:/AIEducation/DeepMAIC", titles: [
+      "微信小程序双轨定价策略梳理", "掌握路径优先流程设计", "用户资料存储：本机 vs 服务器权衡",
+      "生成课堂功能联调", "随堂测验 + 学习报告流程", "DeepMAIC 审计：安全与扩展",
+      "BYOK 买断版定价方案", "内置模型按量付费接入", "输入主题生成课堂原型",
+      "上传教案解析流程", "小红书家长内容选题", "考试相关知识点整理",
+      "平台部署与端口排查", "model_catalog 密钥配置", "system.json 配置优化", "学习报告生成逻辑"
+    ]},
+    { name: "CheckMCP", path: "D:/项目/CheckMCP", titles: [
+      "QCCheckMCP C++ 实现", "YOLO 目标检测对接", "FastMCP 封装 MCP 服务",
+      "MCP 入门指南 V6 审计", "质检大师数据质量检查", "多维度文档重构",
+      "C++ MCP Server 调试", "MCP 协议消息流验证", "指南文档迭代 V5→V6"
+    ]},
+    { name: "OfferAgent", path: "D:/projects/OfferAgent", titles: [
+      "EvidenceGraph 证据图谱", "虚拟面试委员会机制", "OfferSimulationRun 三场景",
+      "一致性模式分析", "技术文章掘金版", "技术文章 CSDN 版配图"
+    ]},
+    { name: "DeepTutor", path: "D:/projects/DeepTutor", titles: [
+      "Docker 部署调试", "后端 8001 前端 3782 端口", "system.json 配置", "CLI 启动排查"
+    ]},
+    { name: "LogDoctor", path: "D:/projects/LogDoctor", titles: [
+      "日志分析核心逻辑", "错误聚类算法", "报告生成模块"
+    ]},
+    { name: "StudyCoach", path: "D:/projects/StudyCoach", titles: [
+      "学习路径生成", "闪卡记忆模块", "随堂测验设计"
+    ]},
+    { name: "QCCheckMCP", path: "D:/项目/CheckMCP/src", titles: [
+      "YOLO 模型集成", "检测结果回传", "性能优化"
+    ]},
+    { name: "简历打磨", path: "D:/projects/resume", titles: [
+      "主简历 V2 整合", "STAR 结构量化成果"
+    ]},
+    { name: "小红书内容", path: "D:/projects/xiaohongshu", titles: [
+      "家长向考试内容制作", "推流数据复盘"
+    ]},
+    { name: "六爻决策", path: "D:/projects/decision", titles: [
+      "求职转型时机占断"
+    ]},
+  ];
+
+  // 展开为完整的 SessionIndex 结构（含 id / projectId / 时间戳）
+  function buildMockIndex(raw) {
+    const projects = raw.map((p, pi) => {
+      const conversations = p.titles.map((title, ci) => {
+        const g = pi * 97 + ci * 53;            // 项目+会话组合的稳定种子
+        const daysAgo = 1 + Math.floor(det(g + 1) * 60);       // 1..60 天前
+        const startHour = 8 + Math.floor(det(g + 2) * 12);     // 8..20 点
+        const durMin = 25 + Math.floor(det(g + 3) * 155);      // 25..180 分钟
+        const createdAt = ts(daysAgo, startHour);
+        const updatedAt = new Date(new Date(createdAt).getTime() + durMin * 60000).toISOString();
+        return {
+          id: `conv-${pi}-${ci}`,
+          projectId: `p-${pi}`,
+          title,
+          createdAt,
+          updatedAt,
+          fileSize: 4000 + Math.floor(det(g + 4) * 60000),
+        };
+      });
+      return { id: `p-${pi}`, name: p.name, path: p.path, conversations };
+    });
+    return { projects };
+  }
+
+  const INDEX = buildMockIndex(MOCK_RAW);
+
+  // ===================================================================
+  //  2. 聚合层（真实集成时，把 INDEX 换成 SessionService 的数据即可）
+  // ===================================================================
+
+  function convStart(c) { return new Date(c.createdAt).getTime(); }
+  function convEnd(c)   { return new Date(c.updatedAt).getTime(); }
+  function convDurMs(c) { return Math.max(0, convEnd(c) - convStart(c)); }
+
+  // 按范围过滤会话
+  function filterByRange(convs, rangeDays) {
+    if (rangeDays === Infinity) return convs;
+    const cutoff = Date.now() - rangeDays * 86400000;
+    return convs.filter(c => convEnd(c) >= cutoff);
+  }
+
+  // 聚合：每个项目 → { name, path, sessions, totalMs, avgMs, lastActive }
+  function aggregateProjects(rangeDays) {
+    return INDEX.projects
+      .map(p => {
+        const convs = filterByRange(p.conversations, rangeDays);
+        const totalMs = convs.reduce((s, c) => s + convDurMs(c), 0);
+        const last = convs.reduce((m, c) => Math.max(m, convEnd(c)), 0);
+        return {
+          name: p.name, path: p.path, sessions: convs.length,
+          totalMs, avgMs: convs.length ? totalMs / convs.length : 0,
+          lastActive: last || null,
+        };
+      })
+      .filter(r => r.sessions > 0)
+      .sort((a, b) => b.totalMs - a.totalMs);
+  }
+
+  // 全局按天分桶（供趋势图 / 热力图使用）
+  function dailyBuckets(rangeDays) {
+    const cutoff = rangeDays === Infinity ? 0 : Date.now() - rangeDays * 86400000;
+    const map = new Map();
+    INDEX.projects.forEach(p => p.conversations.forEach(c => {
+      const t = convStart(c);
+      if (t < cutoff) return;
+      const key = new Date(t).toDateString();
+      const b = map.get(key) || { sessions: 0, ms: 0 };
+      b.sessions += 1;
+      b.ms += convDurMs(c);
+      map.set(key, b);
+    }));
+    return map;
+  }
+
+  function fmtHours(ms) { return (ms / 3600000).toFixed(1) + "h"; }
+  function fmtDur(ms) {
+    const min = Math.round(ms / 60000);
+    return min < 60 ? `${min} 分` : `${(min / 60).toFixed(1)} h`;
+  }
+  function fmtRelative(t) {
+    const d = Math.floor((Date.now() - t) / 86400000);
+    if (d <= 0) return "今天";
+    if (d === 1) return "昨天";
+    if (d < 7) return `${d} 天前`;
+    if (d < 30) return `${Math.floor(d / 7)} 周前`;
+    return new Date(t).toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  }
+
+  const PALETTE = ["var(--p-1)","var(--p-2)","var(--p-3)","var(--p-4)","var(--p-5)","var(--p-6)","var(--p-7)","var(--p-8)","var(--p-9)","var(--p-10)"];
+
+  // ===================================================================
+  //  3. 渲染
+  // ===================================================================
+  let currentRange = 7;
+
+  function renderAll() {
+    const rows = aggregateProjects(currentRange);
+    renderKpi(rows);
+    renderHbar(rows);
+    renderDonut(rows);
+    renderDetail(rows);
+    renderTrend();
+    renderHeatmap();
+    document.getElementById("pill-text").textContent =
+      `已聚合 ${rows.length} 个项目，${rows.reduce((s, r) => s + r.sessions, 0)} 段会话`;
+  }
+
+  function renderKpi(rows) {
+    const totalMs = rows.reduce((s, r) => s + r.totalMs, 0);
+    const totalSessions = rows.reduce((s, r) => s + r.sessions, 0);
+    const top = rows[0];
+    const avg = totalSessions ? totalMs / totalSessions : 0;
+
+    const last7 = aggregateProjects(7).reduce((s, r) => s + r.sessions, 0);
+    const prev7 = INDEX.projects
+      .reduce((acc, p) => acc.concat(p.conversations), [])
+      .filter(c => { const t = convStart(c); return t < Date.now() - 7 * 86400000 && t >= Date.now() - 14 * 86400000; })
+      .length;
+    const delta = last7 - prev7;
+
+    document.getElementById("kpi-grid").innerHTML = `
+      <div class="kpi">
+        <div class="kpi-label"><span class="codicon codicon-clock"></span>累计投入时长</div>
+        <div class="kpi-value">${(totalMs / 3600000).toFixed(1)}<span class="kpi-unit">小时</span></div>
+        <div class="kpi-foot">平均 ${fmtDur(avg)} / 段</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="codicon codicon-comment-discussion"></span>对话总会话数</div>
+        <div class="kpi-value">${totalSessions}<span class="kpi-unit">段</span></div>
+        <div class="kpi-foot">覆盖 ${rows.length} 个项目</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="codicon codicon-flame"></span>最活跃项目</div>
+        <div class="kpi-value" style="font-size:14px;line-height:1.2;">${top ? top.name : "—"}</div>
+        <div class="kpi-foot">${top ? "累计 " + fmtHours(top.totalMs) : ""}</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label"><span class="codicon codicon-rocket"></span>近 7 天会话</div>
+        <div class="kpi-value">${last7}<span class="kpi-unit">段</span></div>
+        <div class="kpi-foot">较前 7 天 <span class="${delta >= 0 ? "up" : "down"}">${delta >= 0 ? "▲" : "▼"} ${Math.abs(delta)} 段</span></div>
+      </div>
+    `;
+  }
+
+  function renderHbar(rows) {
+    const maxMs = Math.max(...rows.map(r => r.totalMs)) || 1;
+    document.getElementById("hbar").innerHTML = rows.map((r, i) => {
+      const pct = Math.max(4, (r.totalMs / maxMs) * 100);
+      return `
+        <div class="hbar-row">
+          <div class="name" title="${r.name}">${r.name} <small>· ${r.sessions} 段</small></div>
+          <div class="hbar-track" role="progressbar" aria-valuenow="${(r.totalMs / 3600000).toFixed(1)}" aria-valuemin="0" aria-valuemax="${(maxMs / 3600000).toFixed(1)}">
+            <div class="hbar-fill" style="width:${pct}%; background:${PALETTE[i % PALETTE.length]};"></div>
+          </div>
+          <div class="value">${fmtHours(r.totalMs)}</div>
+        </div>`;
+    }).join("");
+  }
+
+  function renderDonut(rows) {
+    const top = rows.slice(0, 6);
+    const topTotalMs = top.reduce((s, r) => s + r.totalMs, 0) || 1;
+    const donut = document.getElementById("donut");
+    donut.innerHTML = "";
+    document.getElementById("donut-total").textContent = fmtHours(rows.reduce((s, r) => s + r.totalMs, 0));
+
+    const radius = 15.9155, circumference = 2 * Math.PI * radius, NS = "http://www.w3.org/2000/svg";
+    let offset = 0;
+    top.forEach((r, i) => {
+      const fraction = r.totalMs / topTotalMs;
+      const len = fraction * circumference;
+      const seg = document.createElementNS(NS, "circle");
+      seg.setAttribute("cx", "21"); seg.setAttribute("cy", "21"); seg.setAttribute("r", radius);
+      seg.setAttribute("fill", "transparent"); seg.setAttribute("stroke", PALETTE[i % PALETTE.length]);
+      seg.setAttribute("stroke-width", "6");
+      seg.setAttribute("stroke-dasharray", `${len} ${circumference - len}`);
+      seg.setAttribute("stroke-dashoffset", -offset);
+      seg.setAttribute("transform", "rotate(-90 21 21)");
+      donut.appendChild(seg);
+      offset += len;
+    });
+    const bg = document.createElementNS(NS, "circle");
+    bg.setAttribute("cx", "21"); bg.setAttribute("cy", "21"); bg.setAttribute("r", radius);
+    bg.setAttribute("fill", "transparent"); bg.setAttribute("stroke", "var(--stat-bg-stripe)");
+    bg.setAttribute("stroke-width", "6");
+    donut.prepend(bg);
+
+    document.getElementById("legend").innerHTML = top.map((r, i) => `
+      <div class="legend-row">
+        <span class="swatch" style="background:${PALETTE[i % PALETTE.length]}"></span>
+        <span class="lname">${r.name}</span>
+        <span class="lval">${((r.totalMs / topTotalMs) * 100).toFixed(1)}%</span>
+      </div>`).join("");
+  }
+
+  function renderDetail(rows) {
+    const totalMs = rows.reduce((s, r) => s + r.totalMs, 0) || 1;
+    const maxSessions = Math.max(...rows.map(r => r.sessions)) || 1;
+    document.getElementById("detail-body").innerHTML = rows.map((r, i) => `
+      <tr>
+        <td class="name-cell" title="${r.name}">${r.name}</td>
+        <td class="path-cell" title="${r.path}">${r.path}</td>
+        <td class="num"><span class="bar-mini"><i style="width:${(r.sessions / maxSessions) * 100}%"></i></span>${r.sessions}</td>
+        <td class="num">${fmtHours(r.totalMs)}</td>
+        <td class="num">${fmtDur(r.avgMs)}</td>
+        <td class="num">${r.lastActive ? fmtRelative(r.lastActive) : "—"}</td>
+        <td class="num">${((r.totalMs / totalMs) * 100).toFixed(1)}%</td>
+      </tr>`).join("");
+  }
+
+  function renderTrend() {
+    const buckets = dailyBuckets(30);
+    const days = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(); d.setDate(d.getDate() - i);
+      const key = d.toDateString();
+      const b = buckets.get(key) || { sessions: 0, ms: 0 };
+      days.push(b);
+    }
+    const maxSess = Math.max(...days.map(d => d.sessions)) || 1;
+    const maxHrs = Math.max(...days.map(d => d.ms / 3600000)) || 1;
+
+    const NS = "http://www.w3.org/2000/svg";
+    const W = 600, H = 220, pad = { l: 36, r: 12, t: 12, b: 24 };
+    const innerW = W - pad.l - pad.r, innerH = H - pad.t - pad.b;
+    const svg = document.getElementById("trend");
+    svg.innerHTML = "";
+
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.t + (innerH / 4) * i;
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", pad.l); line.setAttribute("x2", W - pad.r);
+      line.setAttribute("y1", y); line.setAttribute("y2", y);
+      line.setAttribute("stroke", "var(--cc-border)"); line.setAttribute("stroke-dasharray", "2 4");
+      svg.appendChild(line);
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", 4); label.setAttribute("y", y + 4);
+      label.setAttribute("fill", "var(--cc-muted)"); label.setAttribute("font-size", "10");
+      label.textContent = String(Math.round(maxSess - (maxSess / 4) * i));
+      svg.appendChild(label);
+    }
+
+    const barW = innerW / 30 * 0.62;
+    days.forEach((d, i) => {
+      const x = pad.l + (innerW / 30) * i + (innerW / 30 - barW) / 2;
+      const h = (d.sessions / maxSess) * innerH;
+      const y = pad.t + innerH - h;
+      const bar = document.createElementNS(NS, "rect");
+      bar.setAttribute("x", x); bar.setAttribute("y", y);
+      bar.setAttribute("width", barW); bar.setAttribute("height", h);
+      bar.setAttribute("fill", "var(--stat-primary)"); bar.setAttribute("opacity", "0.85");
+      svg.appendChild(bar);
+    });
+
+    const pts = days.map((d, i) => {
+      const x = pad.l + (innerW / 30) * i + (innerW / 30) / 2;
+      const y = pad.t + innerH - ((d.ms / 3600000) / maxHrs) * innerH * 0.95;
+      return [x, y];
+    });
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" "));
+    path.setAttribute("fill", "none"); path.setAttribute("stroke", "var(--stat-warn)"); path.setAttribute("stroke-width", "2");
+    svg.appendChild(path);
+    pts.forEach(([x, y]) => {
+      const c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", "2.5");
+      c.setAttribute("fill", "var(--stat-warn)");
+      svg.appendChild(c);
+    });
+
+    [[0, "30d", "start"], [9, "20d", "middle"], [19, "10d", "middle"], [29, "今天", "end"]].forEach(([idx, label, anchor]) => {
+      const x = pad.l + (innerW / 30) * idx + (innerW / 30) / 2;
+      const t = document.createElementNS(NS, "text");
+      t.setAttribute("x", x); t.setAttribute("y", H - 6);
+      t.setAttribute("fill", "var(--cc-muted)"); t.setAttribute("font-size", "10");
+      t.setAttribute("text-anchor", anchor);
+      t.textContent = label;
+      svg.appendChild(t);
+    });
+  }
+
+  function renderHeatmap() {
+    // 12 周 × 7 天（周一到周日），共 84 格
+    const buckets = dailyBuckets(84);
+    const cols = 12, rows = 7;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    // 对齐到本周一
+    const dow = (today.getDay() + 6) % 7; // 0=周一
+    const monday = new Date(today); monday.setDate(today.getDate() - dow);
+    const startDate = new Date(monday); startDate.setDate(monday.getDate() - (cols - 1) * 7);
+
+    const cells = [];
+    for (let week = 0; week < cols; week++) {
+      for (let day = 0; day < rows; day++) {
+        const d = new Date(startDate); d.setDate(startDate.getDate() + week * 7 + day);
+        const b = buckets.get(d.toDateString()) || { sessions: 0 };
+        cells.push({ v: Math.min(4, b.sessions), date: d });
+      }
+    }
+    const colors = ["var(--stat-bg-stripe)", "#1f4f3a", "#2e7d5b", "#3fa679", "#52d29a"];
+    document.getElementById("heatmap").innerHTML = cells.map(c =>
+      `<span class="cell" style="background:${colors[c.v]}" title="${c.date.toLocaleDateString("zh-CN")} · ${c.v} 段对话"></span>`
+    ).join("");
+
+    // 月份标注：取每 4 周一个月的近似
+    const months = document.getElementById("heat-months");
+    months.innerHTML = "";
+    const monthLabels = [];
+    for (let week = 0; week < cols; week++) {
+      const d = new Date(startDate); d.setDate(startDate.getDate() + week * 7);
+      const label = d.toLocaleDateString("zh-CN", { month: "short" });
+      if (!monthLabels.length || monthLabels[monthLabels.length - 1].label !== label) {
+        monthLabels.push({ label, week });
+      }
+    }
+    monthLabels.forEach((m, i) => {
+      const span = document.createElement("span");
+      const nextWeek = i + 1 < monthLabels.length ? monthLabels[i + 1].week : cols;
+      span.style.gridColumn = `${m.week + 1} / span ${nextWeek - m.week}`;
+      span.textContent = m.label;
+      months.appendChild(span);
+    });
+  }
+
+  // ===================================================================
+  //  4. 交互：筛选真实生效 + 工具栏演示
+  // ===================================================================
+  document.getElementById("range-seg").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-range]");
+    if (!btn) return;
+    currentRange = btn.dataset.range === "Infinity" ? Infinity : Number(btn.dataset.range);
+    document.querySelectorAll("#range-seg button").forEach(b => b.setAttribute("aria-pressed", "false"));
+    btn.setAttribute("aria-pressed", "true");
+    renderAll();
+  });
+
+  document.querySelectorAll(".icon-button").forEach(b => {
+    b.addEventListener("click", () => console.log("[prototype] click", b.getAttribute("aria-label")));
+  });
+
+  renderAll();
+  </script>
+</body>
+</html>
