@@ -7,6 +7,14 @@ export interface TokenUsageSummary {
   totalTokens: number;
 }
 
+export interface ConversationGitSummary {
+  branch?: string;
+  commitHash?: string;
+  repositoryUrl?: string;
+  currentBranch?: string;
+  matchesCurrentBranch?: boolean;
+}
+
 export interface ConversationSummary {
   id: string;
   projectId: string;
@@ -19,6 +27,7 @@ export interface ConversationSummary {
   fileSize: number;
   fileModifiedAt: string;
   sourceVersion?: string;
+  git?: ConversationGitSummary;
   tokenUsage?: TokenUsageSummary;
 }
 
@@ -69,6 +78,7 @@ export interface ConversationDetail {
 export interface PendingHandoff {
   projectPath: string;
   sessionId?: string;
+  gitBranch?: string;
   mode: "open" | "new" | "resume";
   createdAt: string;
 }

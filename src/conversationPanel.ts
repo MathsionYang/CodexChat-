@@ -86,7 +86,7 @@ export class ConversationPanel {
     const summary = this.detail.summary;
     switch (message.type) {
       case "resumeConversation":
-        await this.handoff.resumeConversation(summary.projectPath, summary.id);
+        await this.handoff.resumeConversation(summary.projectPath, summary.id, summary.git?.branch);
         break;
       case "copySessionId":
         await vscode.env.clipboard.writeText(summary.id);

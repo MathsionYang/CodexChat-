@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { PendingHandoff } from "./models";
+import { branchesEqual, readCurrentGitBranch } from "./gitUtils";
 import { pathsEqual } from "./pathUtils";
 import { Locale, localize } from "./i18n";
 import { shouldAttemptDirectSessionRestore } from "./codexHandoffPolicy";
@@ -19,8 +20,8 @@ export class CodexHandoffService {
     await this.start({ projectPath, mode, createdAt: new Date().toISOString() });
   }
 
-  public async resumeConversation(projectPath: string, sessionId: string): Promise<void> {
-    await this.start({ projectPath, sessionId, mode: "resume", createdAt: new Date().toISOString() });
+  public async resumeConversation(projectPath: string, sessionId: string, gitBranch?: string): Promise<void> {
+    await this.start({ projectPath, sessionId, gitBranch, mode: "resume", createdAt: new Date().toISOString() });
   }
 
   public async resumePendingHandoff(): Promise<void> {
@@ -66,6 +67,11 @@ export class CodexHandoffService {
   }
 
   private async executeInCurrentWorkspace(handoff: PendingHandoff): Promise<void> {
+    if (!(await this.confirmBranchMatch(handoff))) {
+      await this.clearPending();
+      return;
+    }
+
     const codex = vscode.extensions.getExtension(CODEX_EXTENSION_ID);
     if (!codex) {
       await this.clearPending();
@@ -107,6 +113,28 @@ export class CodexHandoffService {
     } finally {
       await this.clearPending();
     }
+  }
+
+  private async confirmBranchMatch(handoff: PendingHandoff): Promise<boolean> {
+    if (handoff.mode !== "resume" || !handoff.gitBranch) {
+      return true;
+    }
+
+    const currentBranch = await readCurrentGitBranch(handoff.projectPath);
+    if (!currentBranch || branchesEqual(handoff.gitBranch, currentBranch)) {
+      return true;
+    }
+
+    const continueLabel = localize(this.locale, "handoff.branchMismatchContinue");
+    const choice = await vscode.window.showWarningMessage(
+      localize(this.locale, "handoff.branchMismatch", {
+        sessionBranch: handoff.gitBranch,
+        currentBranch,
+      }),
+      { modal: true },
+      continueLabel,
+    );
+    return choice === continueLabel;
   }
 
   private async tryOpenConversation(version: unknown, sessionId: string): Promise<void> {

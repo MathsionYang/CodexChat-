@@ -9,6 +9,7 @@
   let query = "";
   let isSearchComposing = false;
   let statsVisible = false;
+  let branchFilter = "all";
 
   if (!root) return;
 
@@ -158,7 +159,11 @@
   }
 
   function renderConversations(project, index) {
-    const filtered = project.conversations.filter(item => item.title.toLowerCase().includes(query.toLowerCase()));
+    const hasBranchStatus = project.conversations.some(item => item.git?.branch && typeof item.git.matchesCurrentBranch === "boolean");
+    const scoped = branchFilter === "current"
+      ? project.conversations.filter(item => item.git?.matchesCurrentBranch === true)
+      : project.conversations;
+    const filtered = scoped.filter(item => `${item.title} ${item.git?.branch || ""}`.toLowerCase().includes(query.toLowerCase()));
     return `
       <div class="project-head">
         <div class="project-title-row">
@@ -171,13 +176,14 @@
           <button id="new-codex" class="button" type="button"><span class="codicon codicon-new-file"></span>${text("webview.newConversation")}</button>
         </div>
       </div>
+      ${hasBranchStatus ? branchFilterControl() : ""}
       ${search(text("webview.searchCurrentProjectConversations"))}
       <div class="section-label">${formatCount(filtered.length, "webview.conversationCount")}</div>
       ${filtered.map(item => `
         <div class="list-row" data-session-row="${item.id}">
           <span class="list-icon codicon codicon-${item.archived ? "archive" : "comment-discussion"}"></span>
           <button class="list-copy conversation-open" type="button" data-session-id="${item.id}">
-            <span class="list-name">${escapeHtml(item.title)}</span>
+            <span class="list-title-row"><span class="list-name">${escapeHtml(item.title)}</span>${branchStatus(item)}</span>
             <span class="list-meta">${formatRelative(item.updatedAt)}${item.archived ? ` · ${text("webview.archived")}` : ""}</span>
           </button>
           <button class="icon-button resume" type="button" data-resume-id="${item.id}" aria-label="${text("webview.resumeConversation")}">
@@ -186,6 +192,29 @@
         </div>
       `).join("") || `<div class="empty">${text("webview.noMatchingConversations")}</div>`}
       <div class="section-label">${text("webview.scannedAt", { date: formatDate(index.diagnostic.scannedAt) })}</div>
+    `;
+  }
+
+  function branchFilterControl() {
+    return `
+      <div class="branch-filter" role="group" aria-label="${text("webview.currentBranchFilter")}">
+        <button type="button" data-branch-filter="all" aria-pressed="${branchFilter === "all"}">${text("webview.allBranchesFilter")}</button>
+        <button type="button" data-branch-filter="current" aria-pressed="${branchFilter === "current"}">${text("webview.currentBranchFilter")}</button>
+      </div>
+    `;
+  }
+
+  function branchStatus(item) {
+    const git = item.git || {};
+    if (!git.branch || typeof git.matchesCurrentBranch !== "boolean") return "";
+    const matches = git.matchesCurrentBranch;
+    const title = matches
+      ? text("webview.branchMatchesCurrent", { branch: git.branch })
+      : text("webview.branchDiffersCurrent", { branch: git.branch, currentBranch: git.currentBranch || text("common.unknown") });
+    return `
+      <span class="branch-status ${matches ? "match" : "mismatch"}" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}">
+        <span class="codicon codicon-${matches ? "pass-filled" : "warning"}"></span><span>${escapeHtml(git.branch)}</span>
+      </span>
     `;
   }
 
@@ -221,16 +250,19 @@
     root.querySelector("#project-token-stats")?.addEventListener("click", () => {
       statsVisible = true;
       query = "";
+      branchFilter = "all";
       renderSidebar();
     });
     root.querySelector("#diagnostic")?.addEventListener("click", () => post("showDiagnostic"));
     root.querySelector("#back-stats")?.addEventListener("click", () => {
       statsVisible = false;
       query = "";
+      branchFilter = "all";
       renderSidebar();
     });
     root.querySelector("#back-projects")?.addEventListener("click", () => {
       query = "";
+      branchFilter = "all";
       post("showProjects");
     });
     root.querySelector("#open-codex")?.addEventListener("click", () => post("openCodex", { mode: "open" }));
@@ -239,7 +271,14 @@
       button.addEventListener("click", () => {
         statsVisible = false;
         query = "";
+        branchFilter = "all";
         post("selectProject", { projectPath: button.dataset.projectPath });
+      });
+    });
+    root.querySelectorAll("[data-branch-filter]").forEach(button => {
+      button.addEventListener("click", () => {
+        branchFilter = button.dataset.branchFilter === "current" ? "current" : "all";
+        renderSidebar();
       });
     });
     root.querySelectorAll("[data-session-id]").forEach(button => {
@@ -274,6 +313,7 @@
               <span><span class="codicon codicon-calendar"></span>${formatDate(summary.createdAt)}</span>
               <span><span class="codicon codicon-history"></span>${formatDate(summary.updatedAt)}</span>
               <span><span class="codicon codicon-${summary.archived ? "archive" : "record"}"></span>${summary.archived ? text("webview.archived") : text("webview.localConversation")}</span>
+              ${detailBranchStatus(summary)}
               <span><span class="codicon codicon-symbol-key"></span>${escapeHtml(summary.id)}</span>
             </div>
           </div>
@@ -293,6 +333,19 @@
     root.querySelector("#resume")?.addEventListener("click", () => post("resumeConversation"));
     root.querySelector("#copy-id")?.addEventListener("click", () => post("copySessionId"));
     root.querySelector("#reveal-file")?.addEventListener("click", () => post("revealSessionFile"));
+  }
+
+  function detailBranchStatus(summary) {
+    const git = summary.git || {};
+    if (!git.branch) return "";
+    if (typeof git.matchesCurrentBranch !== "boolean") {
+      return `<span title="${escapeAttr(text("webview.branchLabel", { branch: git.branch }))}"><span class="codicon codicon-git-branch"></span>${escapeHtml(git.branch)}</span>`;
+    }
+    const matches = git.matchesCurrentBranch;
+    const title = matches
+      ? text("webview.branchMatchesCurrent", { branch: git.branch })
+      : text("webview.branchDiffersCurrent", { branch: git.branch, currentBranch: git.currentBranch || text("common.unknown") });
+    return `<span title="${escapeAttr(title)}"><span class="codicon codicon-${matches ? "pass-filled" : "warning"}"></span>${escapeHtml(git.branch)}</span>`;
   }
 
   function message(entry) {

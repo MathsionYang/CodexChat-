@@ -1,8 +1,8 @@
 # CodexChat
 
-> A local-first VS Code companion for browsing, restoring, and understanding your OpenAI Codex sessions by project folder.
+> A local-first VS Code companion for organizing, inspecting, measuring, and resuming OpenAI Codex sessions by project folder.
 
-Current version: **0.1.6**
+Current version: **0.1.7**
 
 You can install it by searching **"CodexChat"** in the VS Code Marketplace.
 
@@ -17,7 +17,7 @@ OpenAI Codex stores local conversations under the user's `.codex` data directory
 - token usage is hard to understand at the project level;
 - resuming an old local session often requires manual digging.
 
-CodexChat solves this as a companion manager. It does not replace the official Codex extension. It organizes your existing local Codex records so you can browse, inspect, summarize, and hand off sessions back to Codex more easily.
+CodexChat is a local companion manager for the official Codex extension. It organizes existing session records by project, provides a read-only conversation view, summarizes token usage, shows recorded branch status, and hands work back to Codex when you want to continue.
 
 ## Privacy Model
 
@@ -53,6 +53,7 @@ You can override it with the `codexChat.codexHome` setting.
 
 - Opens local Codex conversations in a read-only VS Code panel.
 - Shows user messages, Codex replies, and tool-call summaries.
+- Keeps the conversation summary and actions visible while you scroll through a long history.
 - Handles partially written or malformed JSONL lines safely.
 - Truncates very large conversations after 2,000 records to keep the UI responsive.
 - Lets you copy a conversation ID when needed.
@@ -143,9 +144,9 @@ Press `F5` in VS Code to launch the Extension Development Host.
 
 # CodexChat 中文说明
 
-> CodexChat 是一个本地优先的 VS Code 伴生扩展，用于按项目文件夹浏览、恢复和理解 OpenAI Codex 本地会话。
+> CodexChat 是一个本地优先的 VS Code 伴生扩展，用于按项目文件夹组织、查看、统计并恢复 OpenAI Codex 本地会话。
 
-当前版本：**0.1.6**
+当前版本：**0.1.7**
 
 你可以直接在 VS Code 应用商店搜索 **"CodexChat"** 安装。
 
@@ -160,7 +161,7 @@ OpenAI Codex 会把本地会话记录保存在用户机器的 `.codex` 数据目
 - 很难按项目统计 token 消耗；
 - 想继续某个历史会话时，经常需要手动翻找记录。
 
-CodexChat 的定位是本地会话伴生管理器。它不替代官方 Codex 扩展，而是把已有的本地 Codex 记录按项目组织起来，方便浏览、查看、统计和回到 Codex 中继续工作。
+CodexChat 是官方 Codex 扩展的本地伴生管理器。它会按项目整理已有会话记录，提供只读会话详情、Token 用量统计、记录分支状态，并在需要时将工作交回 Codex 继续。
 
 ## 隐私边界
 
@@ -196,6 +197,7 @@ CodexChat 采用本地优先、只读设计。
 
 - 在 VS Code 面板中只读查看本地 Codex 会话。
 - 展示用户消息、Codex 回复和工具调用摘要。
+- 浏览长会话时，顶部摘要和操作按钮保持可见。
 - 对正在写入或格式异常的 JSONL 行做容错处理。
 - 对超大对话限制展示前 2,000 条记录，避免界面卡顿。
 - 支持复制会话 ID。

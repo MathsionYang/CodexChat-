@@ -154,7 +154,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       void vscode.window.showWarningMessage(localize(this.locale, "sidebar.conversationGone"));
       return;
     }
-    await this.handoff.resumeConversation(summary.projectPath, summary.id);
+    await this.handoff.resumeConversation(summary.projectPath, summary.id, summary.git?.branch);
   }
 
   private findConversation(sessionId: string): ConversationSummary | undefined {

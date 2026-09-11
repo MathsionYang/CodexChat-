@@ -3,6 +3,7 @@ import { promises as fsPromises } from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import {
+  ConversationGitSummary,
   ConversationDetail,
   ConversationEntry,
   ConversationSummary,
@@ -12,6 +13,7 @@ import {
   TokenUsageSummary,
 } from "./models";
 import { formatDate, Locale, localize } from "./i18n";
+import { branchesEqual, readCurrentGitBranch } from "./gitUtils";
 import { normalizeProjectPath, projectIdForPath, projectNameForPath } from "./pathUtils";
 
 interface IndexedTitle {
@@ -24,6 +26,7 @@ interface ParsedSessionMeta {
   cwd: string;
   createdAt: string;
   sourceVersion?: string;
+  git?: ConversationGitSummary;
 }
 
 interface ScanOptions {
@@ -72,12 +75,13 @@ export class CodexSessionRepository {
       : [];
 
     const byId = new Map<string, ConversationSummary>();
+    const gitBranchByProjectPath = new Map<string, Promise<string | undefined>>();
     for (const item of [
       ...activeFiles.map(filePath => ({ filePath, archived: false })),
       ...archivedFiles.map(filePath => ({ filePath, archived: true })),
     ]) {
       try {
-        const summary = await this.readSummary(item.filePath, item.archived, titles);
+        const summary = await this.readSummary(item.filePath, item.archived, titles, gitBranchByProjectPath);
         if (!summary) {
           failedFileCount += 1;
           continue;
@@ -207,6 +211,7 @@ export class CodexSessionRepository {
     filePath: string,
     archived: boolean,
     titles: Map<string, IndexedTitle>,
+    gitBranchByProjectPath: Map<string, Promise<string | undefined>>,
   ): Promise<ConversationSummary | undefined> {
     const meta = await readSessionMeta(filePath);
     if (!meta?.id) {
@@ -221,6 +226,7 @@ export class CodexSessionRepository {
     ]);
     const projectPath = meta.cwd ? path.resolve(meta.cwd) : "";
     const projectId = projectIdForPath(projectPath);
+    const git = await buildConversationGitSummary(projectPath, meta.git, gitBranchByProjectPath);
     const createdAt = meta.createdAt || stats.birthtime.toISOString();
     const updatedAt = latestIso(indexed?.updatedAt, stats.mtime.toISOString(), createdAt);
     return {
@@ -235,6 +241,7 @@ export class CodexSessionRepository {
       fileSize: stats.size,
       fileModifiedAt: stats.mtime.toISOString(),
       sourceVersion: meta.sourceVersion,
+      git,
       tokenUsage,
     };
   }
@@ -402,6 +409,7 @@ async function readSessionMeta(filePath: string): Promise<ParsedSessionMeta | un
           cwd: asNonEmptyString(payload.cwd) || "",
           createdAt: asIsoString(payload.timestamp) || asIsoString(record.timestamp) || "",
           sourceVersion: asNonEmptyString(payload.cli_version),
+          git: parseSessionGit(payload.git),
         };
       } catch {
         if (inspected >= 10) {
@@ -472,6 +480,61 @@ async function readTokenUsage(filePath: string): Promise<TokenUsageSummary | und
     stream.destroy();
   }
   return latest;
+}
+
+async function buildConversationGitSummary(
+  projectPath: string,
+  git: ConversationGitSummary | undefined,
+  gitBranchByProjectPath: Map<string, Promise<string | undefined>>,
+): Promise<ConversationGitSummary | undefined> {
+  if (!git) {
+    return undefined;
+  }
+
+  const branch = asNonEmptyString(git.branch);
+  if (!branch) {
+    return git;
+  }
+
+  const currentBranch = projectPath ? await currentBranchForProject(projectPath, gitBranchByProjectPath) : undefined;
+  if (!currentBranch) {
+    return { ...git, branch };
+  }
+
+  return {
+    ...git,
+    branch,
+    currentBranch,
+    matchesCurrentBranch: branchesEqual(branch, currentBranch),
+  };
+}
+
+function currentBranchForProject(
+  projectPath: string,
+  gitBranchByProjectPath: Map<string, Promise<string | undefined>>,
+): Promise<string | undefined> {
+  const normalized = normalizeProjectPath(projectPath);
+  const cached = gitBranchByProjectPath.get(normalized);
+  if (cached) {
+    return cached;
+  }
+  const branch = readCurrentGitBranch(projectPath);
+  gitBranchByProjectPath.set(normalized, branch);
+  return branch;
+}
+
+function parseSessionGit(value: unknown): ConversationGitSummary | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const git: ConversationGitSummary = {
+    branch: asNonEmptyString(value.branch) || asNonEmptyString(value.current_branch),
+    commitHash: asNonEmptyString(value.commit_hash) || asNonEmptyString(value.commitHash) || asNonEmptyString(value.commit),
+    repositoryUrl: asNonEmptyString(value.repository_url) || asNonEmptyString(value.repositoryUrl) || asNonEmptyString(value.remote_url),
+  };
+
+  return git.branch || git.commitHash || git.repositoryUrl ? git : undefined;
 }
 
 function parseTotalTokenUsage(record: unknown): TokenUsageSummary | undefined {

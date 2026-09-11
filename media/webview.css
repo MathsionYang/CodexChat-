@@ -319,6 +319,78 @@ input:focus-visible {
   gap: 6px;
 }
 
+.branch-filter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 8px 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--cc-border);
+  border-radius: 3px;
+}
+
+.branch-filter button {
+  min-width: 0;
+  min-height: 26px;
+  padding: 3px 8px;
+  overflow: hidden;
+  color: var(--cc-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+}
+
+.branch-filter button + button {
+  border-left: 1px solid var(--cc-border);
+}
+
+.branch-filter button:hover {
+  background: var(--cc-hover);
+}
+
+.branch-filter button[aria-pressed="true"] {
+  color: var(--cc-active-text);
+  background: var(--cc-active);
+}
+
+.list-title-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.list-title-row .list-name {
+  min-width: 0;
+}
+
+.branch-status {
+  display: inline-flex;
+  max-width: 44%;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 3px;
+  overflow: hidden;
+  color: var(--cc-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.branch-status span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.branch-status.match {
+  color: var(--vscode-testing-iconPassed, #2ea043);
+}
+
+.branch-status.mismatch {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
 .button {
   display: inline-flex;
   min-height: 28px;
@@ -364,11 +436,15 @@ input:focus-visible {
 }
 
 .detail-heading {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 20px;
   padding-bottom: 20px;
+  background: var(--vscode-editor-background);
   border-bottom: 1px solid var(--cc-border);
 }
 

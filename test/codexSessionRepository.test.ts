@@ -165,6 +165,57 @@ test("excludes conversations whose project path no longer exists", async t => {
   assert.equal(index.conversations[0].tokenUsage?.totalTokens, 100);
 });
 
+test("marks recorded git branches against the current project branch", async t => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "codexchat-branch-test-"));
+  t.after(() => fs.rm(temporary, { recursive: true, force: true }));
+
+  const projectPath = path.join(temporary, "branch-project");
+  const sessionDirectory = path.join(temporary, "sessions", "2026", "08", "21");
+  await fs.mkdir(path.join(projectPath, ".git"), { recursive: true });
+  await fs.mkdir(sessionDirectory, { recursive: true });
+  await fs.writeFile(path.join(projectPath, ".git", "HEAD"), "ref: refs/heads/main\n", "utf8");
+
+  const writeSession = async (sessionId: string, branch: string | undefined, timestamp: string) => {
+    const payload: Record<string, unknown> = {
+      session_id: sessionId,
+      id: sessionId,
+      timestamp,
+      cwd: projectPath,
+    };
+    if (branch) {
+      payload.git = {
+        branch,
+        commit_hash: `${branch.replace(/\W/g, "") || "branch"}1234567890`,
+        repository_url: "git@example.com:demo/branch-project.git",
+      };
+    }
+    await fs.writeFile(
+      path.join(sessionDirectory, `rollout-${sessionId}.jsonl`),
+      JSON.stringify({ timestamp, type: "session_meta", payload }) + "\n",
+      "utf8",
+    );
+  };
+
+  const matchingSessionId = "41111111-2222-4333-8444-555555555555";
+  const mismatchedSessionId = "51111111-2222-4333-8444-555555555555";
+  const noBranchSessionId = "61111111-2222-4333-8444-555555555555";
+  await writeSession(matchingSessionId, "main", "2026-08-21T10:00:00.000Z");
+  await writeSession(mismatchedSessionId, "feature/demo", "2026-08-21T10:01:00.000Z");
+  await writeSession(noBranchSessionId, undefined, "2026-08-21T10:02:00.000Z");
+
+  const repository = new CodexSessionRepository(temporary, "en");
+  const index = await repository.scan({ includeArchived: true });
+  const byId = new Map(index.conversations.map(conversation => [conversation.id, conversation]));
+
+  assert.equal(byId.get(matchingSessionId)?.git?.branch, "main");
+  assert.equal(byId.get(matchingSessionId)?.git?.currentBranch, "main");
+  assert.equal(byId.get(matchingSessionId)?.git?.matchesCurrentBranch, true);
+  assert.equal(byId.get(mismatchedSessionId)?.git?.branch, "feature/demo");
+  assert.equal(byId.get(mismatchedSessionId)?.git?.currentBranch, "main");
+  assert.equal(byId.get(mismatchedSessionId)?.git?.matchesCurrentBranch, false);
+  assert.equal(byId.get(noBranchSessionId)?.git, undefined);
+});
+
 test("keeps manually selected projects that have no conversations", async t => {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "codexchat-empty-test-"));
   t.after(() => fs.rm(temporary, { recursive: true, force: true }));

@@ -1,6 +1,6 @@
 {
   "manifest.displayName": "CodexChat",
-  "manifest.description": "Browse and restore local Codex conversations by project folder.",
+  "manifest.description": "Browse, inspect, and resume local Codex conversations by project, with token stats, branch checks, and local-only storage.",
   "manifest.view.projectSessions": "Project sessions",
   "command.refresh": "Refresh local sessions",
   "command.selectProject": "Select project folder",
