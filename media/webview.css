@@ -28,6 +28,24 @@ body[data-view="detail"] {
   background: var(--vscode-editor-background);
 }
 
+body[data-view="sidebar"] {
+  height: 100vh;
+  overflow: hidden;
+}
+
+body[data-view="sidebar"] #app {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.sidebar-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 button,
 input {
   color: inherit;
@@ -138,6 +156,53 @@ input:focus-visible {
   text-align: left;
   background: transparent;
   border: 0;
+}
+
+.project-row,
+.list-row[data-session-row] {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto auto;
+}
+
+.project-open {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+}
+
+.project-open:hover {
+  color: inherit;
+  background: transparent;
+}
+
+.row-action {
+  flex: 0 0 auto;
+}
+
+.row-action[aria-pressed="true"] {
+  color: var(--vscode-button-foreground, #ffffff);
+  background: var(--vscode-button-background, #0078d4);
+  box-shadow: inset 0 0 0 1px var(--vscode-contrastBorder, transparent);
+}
+
+.row-action[aria-pressed="true"]:hover {
+  background: var(--vscode-button-hoverBackground, #006cbe);
+}
+
+.row-action.danger,
+.button.danger {
+  color: var(--vscode-editorError-foreground, #f14c4c);
+}
+
+.pin-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--vscode-textLink-foreground);
+  font-size: 11px;
 }
 
 .list-row:hover {
@@ -289,6 +354,38 @@ input:focus-visible {
 .project-head {
   padding: 9px;
   border-bottom: 1px solid var(--cc-border);
+}
+
+.project-summary-footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  color: var(--cc-muted);
+  background: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  border-top: 1px solid var(--cc-border);
+  box-shadow: 0 -4px 12px color-mix(in srgb, var(--vscode-editor-background) 30%, transparent);
+}
+
+.project-summary-footer > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-summary-footer strong {
+  color: var(--vscode-foreground);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-label {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-title-row {

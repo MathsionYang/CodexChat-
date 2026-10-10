@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { ConversationDetail } from "./models";
 import { CodexHandoffService } from "./codexHandoffService";
+import { SessionService } from "./sessionService";
 import { Locale, formatDate, localize, webviewContext } from "./i18n";
 import { csp, nonce, webviewAssets } from "./webviewUtils";
 
@@ -11,6 +12,7 @@ export class ConversationPanel {
     context: vscode.ExtensionContext,
     detail: ConversationDetail,
     handoff: CodexHandoffService,
+    sessions: SessionService,
     locale: Locale,
   ): void {
     if (ConversationPanel.current) {
@@ -29,7 +31,7 @@ export class ConversationPanel {
         localResourceRoots: [context.extensionUri],
       },
     );
-    ConversationPanel.current = new ConversationPanel(context, panel, detail, handoff, locale);
+    ConversationPanel.current = new ConversationPanel(context, panel, detail, handoff, sessions, locale);
   }
 
   private readonly disposables: vscode.Disposable[] = [];
@@ -40,6 +42,7 @@ export class ConversationPanel {
     private readonly panel: vscode.WebviewPanel,
     detail: ConversationDetail,
     private readonly handoff: CodexHandoffService,
+    private readonly sessions: SessionService,
     private readonly locale: Locale,
   ) {
     this.detail = detail;
@@ -47,6 +50,9 @@ export class ConversationPanel {
     this.disposables.push(
       panel.onDidDispose(() => this.dispose()),
       panel.webview.onDidReceiveMessage(message => this.onMessage(message)),
+      sessions.onDidChange(index => {
+        if (!index.conversations.some(item => item.id === this.detail.summary.id)) this.panel.dispose();
+      }),
     );
   }
 
@@ -95,6 +101,24 @@ export class ConversationPanel {
       case "revealSessionFile":
         await vscode.commands.executeCommand("revealFileInOS", vscode.Uri.file(summary.filePath));
         break;
+      case "deleteConversation": {
+        const confirmLabel = localize(this.locale, "delete.confirmConversationButton");
+        const choice = await vscode.window.showWarningMessage(
+          localize(this.locale, "delete.confirmConversation", { title: summary.title }),
+          { modal: true },
+          confirmLabel,
+        );
+        if (choice === confirmLabel) {
+          try {
+            await this.sessions.deleteConversation(summary);
+          } catch (error) {
+            void vscode.window.showErrorMessage(localize(this.locale, "sidebar.actionError", {
+              message: error instanceof Error ? error.message : String(error),
+            }));
+          }
+        }
+        break;
+      }
       case "openProjectFolder":
         await vscode.env.openExternal(vscode.Uri.file(summary.projectPath));
         break;

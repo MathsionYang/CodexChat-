@@ -10,6 +10,7 @@
   let isSearchComposing = false;
   let statsVisible = false;
   let branchFilter = "all";
+  let renderedPage = "";
 
   if (!root) return;
 
@@ -21,6 +22,7 @@
   window.addEventListener("message", event => {
     if (event.data?.type !== "state") return;
     sidebarState = event.data.payload;
+    if (isSearchComposing) return;
     renderSidebar();
   });
   post("ready");
@@ -34,8 +36,21 @@
       return;
     }
 
-    root.innerHTML = statsVisible ? renderProjectTokenStats(index) : selected ? renderConversations(selected, index) : renderProjects(index);
+    const page = statsVisible ? "stats" : selected?.path || "projects";
+    const scrollTop = renderedPage === page ? root.querySelector(".sidebar-scroll")?.scrollTop || 0 : 0;
+    const searchFocused = document.activeElement?.id === "search";
+    const selectionStart = searchFocused ? document.activeElement.selectionStart : null;
+    const selectionEnd = searchFocused ? document.activeElement.selectionEnd : null;
+    const content = statsVisible ? renderProjectTokenStats(index) : selected ? renderConversations(selected, index) : renderProjects(index);
+    root.innerHTML = `<div class="sidebar-scroll">${content}</div>${selected && !statsVisible ? projectSummaryFooter(selected, index) : overviewSummaryFooter(index)}`;
+    renderedPage = page;
     bindSidebarEvents();
+    root.querySelector(".sidebar-scroll").scrollTop = scrollTop;
+    if (searchFocused) {
+      const input = root.querySelector("#search");
+      input?.focus();
+      if (selectionStart !== null) input?.setSelectionRange(selectionStart, selectionEnd);
+    }
   }
 
   function renderProjects(index) {
@@ -52,15 +67,27 @@
       ${index.diagnostic.warnings.length ? `<div class="warning">${escapeHtml(index.diagnostic.warnings[0])}</div>` : ""}
       <div class="section-label">${formatCount(index.projects.length, "webview.projectCount")}</div>
       ${filtered.map(project => `
-        <button class="list-row" type="button" data-project-path="${escapeAttr(project.path)}">
+        <div class="list-row project-row" data-project-row="${escapeAttr(project.path)}">
           <span class="list-icon codicon codicon-${project.pathExists ? "folder" : "folder-unopened"}"></span>
-          <span class="list-copy">
-            <span class="list-name">${escapeHtml(project.name)}</span>
+          <button class="list-copy project-open" type="button" data-project-path="${escapeAttr(project.path)}">
+            <span class="list-title-row"><span class="list-name">${escapeHtml(project.name)}</span>${project.pinned ? `<span class="pin-badge" title="${escapeAttr(text("webview.pinned"))}"><span class="codicon codicon-pin"></span></span>` : ""}</span>
             <span class="list-meta">${escapeHtml(project.path || text("webview.noProjectPath"))} · ${formatRelative(project.lastConversationAt)}</span>
-          </span>
+          </button>
           <span class="list-count">${project.conversations.length}</span>
-        </button>
+          <button class="icon-button row-action" type="button" data-project-pin="${escapeAttr(project.path)}" aria-pressed="${Boolean(project.pinned)}" title="${escapeAttr(project.pinned ? text("webview.unpinProject") : text("webview.pinProject"))}" aria-label="${escapeAttr(project.pinned ? text("webview.unpinProject") : text("webview.pinProject"))}"><span class="codicon codicon-pin"></span></button>
+          <button class="icon-button row-action danger" type="button" data-project-delete="${escapeAttr(project.path)}" aria-label="${escapeAttr(text("webview.deleteProject"))}"><span class="codicon codicon-trash"></span></button>
+        </div>
       `).join("") || `<div class="empty">${text("webview.noMatchingProjects")}</div>`}
+    `;
+  }
+
+  function overviewSummaryFooter(index) {
+    const totalTokens = index.projects.reduce((sum, project) => sum + (project.conversations || []).reduce((projectSum, item) => projectSum + (item.tokenUsage?.totalTokens || 0), 0), 0);
+    return `
+      <footer class="project-summary-footer" aria-label="${escapeAttr(text("webview.projectTokenStats"))}">
+        <span><span class="summary-label">${text("webview.totalTokenUsage")}</span><strong title="${formatExactTokenCount(totalTokens)}">${formatTokenCount(totalTokens)}</strong></span>
+        <span><span class="summary-label">${text("webview.projectTotal")}</span><strong>${index.projects.length}</strong></span>
+      </footer>
     `;
   }
 
@@ -180,18 +207,30 @@
       ${search(text("webview.searchCurrentProjectConversations"))}
       <div class="section-label">${formatCount(filtered.length, "webview.conversationCount")}</div>
       ${filtered.map(item => `
-        <div class="list-row" data-session-row="${item.id}">
+        <div class="list-row" data-session-row="${escapeAttr(item.id)}">
           <span class="list-icon codicon codicon-${item.archived ? "archive" : "comment-discussion"}"></span>
-          <button class="list-copy conversation-open" type="button" data-session-id="${item.id}">
-            <span class="list-title-row"><span class="list-name">${escapeHtml(item.title)}</span>${branchStatus(item)}</span>
+          <button class="list-copy conversation-open" type="button" data-session-id="${escapeAttr(item.id)}">
+            <span class="list-title-row"><span class="list-name">${escapeHtml(item.title)}</span>${item.pinned ? `<span class="pin-badge" title="${escapeAttr(text("webview.pinned"))}"><span class="codicon codicon-pin"></span></span>` : ""}${branchStatus(item)}</span>
             <span class="list-meta">${formatRelative(item.updatedAt)}${item.archived ? ` · ${text("webview.archived")}` : ""}</span>
           </button>
-          <button class="icon-button resume" type="button" data-resume-id="${item.id}" aria-label="${text("webview.resumeConversation")}">
+          <button class="icon-button row-action" type="button" data-pin-id="${escapeAttr(item.id)}" aria-pressed="${Boolean(item.pinned)}" title="${escapeAttr(item.pinned ? text("webview.unpinConversation") : text("webview.pinConversation"))}" aria-label="${escapeAttr(item.pinned ? text("webview.unpinConversation") : text("webview.pinConversation"))}"><span class="codicon codicon-pin"></span></button>
+          <button class="icon-button row-action danger" type="button" data-delete-id="${escapeAttr(item.id)}" aria-label="${escapeAttr(text("webview.deleteConversation"))}"><span class="codicon codicon-trash"></span></button>
+          <button class="icon-button resume" type="button" data-resume-id="${escapeAttr(item.id)}" aria-label="${text("webview.resumeConversation")}">
             <span class="codicon codicon-debug-continue"></span>
           </button>
         </div>
       `).join("") || `<div class="empty">${text("webview.noMatchingConversations")}</div>`}
       <div class="section-label">${text("webview.scannedAt", { date: formatDate(index.diagnostic.scannedAt) })}</div>
+    `;
+  }
+
+  function projectSummaryFooter(project, index) {
+    const totalTokens = (project.conversations || []).reduce((sum, item) => sum + (item.tokenUsage?.totalTokens || 0), 0);
+    return `
+      <footer class="project-summary-footer" aria-label="${escapeAttr(text("webview.projectTokenStats"))}">
+        <span><span class="summary-label">${text("webview.totalTokenUsage")}</span><strong title="${formatExactTokenCount(totalTokens)}">${formatTokenCount(totalTokens)}</strong></span>
+        <span><span class="summary-label">${text("webview.projectTotal")}</span><strong>${index.projects.length}</strong></span>
+      </footer>
     `;
   }
 
@@ -224,6 +263,15 @@
 
   function iconButton(iconName, label, id, pressed = false) {
     return `<button id="${id}" class="icon-button" type="button" aria-label="${escapeAttr(label)}"${pressed ? ` title="${escapeAttr(label)}" aria-pressed="true"` : ""}><span class="codicon codicon-${iconName}"></span></button>`;
+  }
+
+  function showPinFeedback(button, pinLabel, unpinLabel) {
+    const pinned = button.getAttribute("aria-pressed") !== "true";
+    button.setAttribute("aria-pressed", String(pinned));
+    const label = text(pinned ? unpinLabel : pinLabel);
+    button.setAttribute("aria-label", label);
+    button.title = label;
+    button.disabled = true;
   }
 
   function bindSidebarEvents() {
@@ -267,6 +315,19 @@
     });
     root.querySelector("#open-codex")?.addEventListener("click", () => post("openCodex", { mode: "open" }));
     root.querySelector("#new-codex")?.addEventListener("click", () => post("openCodex", { mode: "new" }));
+    root.querySelectorAll("[data-project-pin]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.stopPropagation();
+        showPinFeedback(button, "webview.pinProject", "webview.unpinProject");
+        post("toggleProjectPin", { projectPath: button.dataset.projectPin });
+      });
+    });
+    root.querySelectorAll("[data-project-delete]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.stopPropagation();
+        post("deleteProject", { projectPath: button.dataset.projectDelete });
+      });
+    });
     root.querySelectorAll("[data-project-path]").forEach(button => {
       button.addEventListener("click", () => {
         statsVisible = false;
@@ -286,6 +347,19 @@
     });
     root.querySelectorAll("[data-resume-id]").forEach(button => {
       button.addEventListener("click", () => post("resumeConversation", { sessionId: button.dataset.resumeId }));
+    });
+    root.querySelectorAll("[data-pin-id]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.stopPropagation();
+        showPinFeedback(button, "webview.pinConversation", "webview.unpinConversation");
+        post("toggleConversationPin", { sessionId: button.dataset.pinId });
+      });
+    });
+    root.querySelectorAll("[data-delete-id]").forEach(button => {
+      button.addEventListener("click", event => {
+        event.stopPropagation();
+        post("deleteConversation", { sessionId: button.dataset.deleteId });
+      });
     });
   }
 
@@ -321,6 +395,7 @@
             <button id="resume" class="button primary" type="button"><span class="codicon codicon-debug-continue"></span>${text("webview.resumeConversation")}</button>
             <button id="copy-id" class="button compact" type="button" aria-label="${text("webview.copySessionId")}"><span class="codicon codicon-copy"></span></button>
             <button id="reveal-file" class="button compact" type="button" aria-label="${text("webview.revealSessionFile")}"><span class="codicon codicon-folder-opened"></span></button>
+            <button id="delete-conversation" class="button compact danger" type="button" aria-label="${text("webview.deleteConversation")}"><span class="codicon codicon-trash"></span></button>
           </div>
         </header>
         ${detail.malformedLineCount ? `<div class="warning">${text("webview.malformedLines", { count: detail.malformedLineCount })}</div>` : ""}
@@ -333,6 +408,7 @@
     root.querySelector("#resume")?.addEventListener("click", () => post("resumeConversation"));
     root.querySelector("#copy-id")?.addEventListener("click", () => post("copySessionId"));
     root.querySelector("#reveal-file")?.addEventListener("click", () => post("revealSessionFile"));
+    root.querySelector("#delete-conversation")?.addEventListener("click", () => post("deleteConversation"));
   }
 
   function detailBranchStatus(summary) {

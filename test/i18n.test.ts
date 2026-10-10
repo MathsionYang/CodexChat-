@@ -29,3 +29,11 @@ test("returns a complete dictionary for webviews", () => {
   assert.equal(en["webview.openCodex"], "Open Codex");
   assert.deepEqual(Object.keys(zh).sort(), Object.keys(en).sort());
 });
+
+test("management actions and destructive confirmations use the selected language", () => {
+  assert.equal(localize("en", "webview.pinProject"), "Pin project");
+  assert.equal(localize("en", "webview.pinConversation"), "Pin conversation");
+  assert.match(localize("en", "delete.confirmConversation", { title: "Example" }), /Example.*cannot be undone/);
+  assert.equal(localize("zh-CN", "webview.pinProject"), "置顶项目");
+  assert.match(localize("zh-CN", "delete.confirmProject", { name: "测试", count: 2 }), /测试.*2.*不可撤销/);
+});

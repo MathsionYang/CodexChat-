@@ -29,6 +29,7 @@ export interface ConversationSummary {
   sourceVersion?: string;
   git?: ConversationGitSummary;
   tokenUsage?: TokenUsageSummary;
+  pinned: boolean;
 }
 
 export interface ProjectSummary {
@@ -41,6 +42,7 @@ export interface ProjectSummary {
   lastOpenedAt?: string;
   pathExists: boolean;
   custom: boolean;
+  pinned: boolean;
   conversations: ConversationSummary[];
 }
 

@@ -232,3 +232,120 @@ test("keeps manually selected projects that have no conversations", async t => {
   assert.equal(index.projects[0].custom, true);
   assert.equal(index.projects[0].conversations.length, 0);
 });
+
+test("marks and sorts pinned projects and conversations before unpinned items", async t => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "codexchat-pinned-test-"));
+  t.after(() => fs.rm(temporary, { recursive: true, force: true }));
+
+  const firstProject = path.join(temporary, "first-project");
+  const pinnedProject = path.join(temporary, "pinned-project");
+  const sessionDirectory = path.join(temporary, "sessions", "2026", "08", "22");
+  await fs.mkdir(firstProject, { recursive: true });
+  await fs.mkdir(pinnedProject, { recursive: true });
+  await fs.mkdir(sessionDirectory, { recursive: true });
+
+  const writeSession = async (sessionId: string, cwd: string, timestamp: string) => {
+    await fs.writeFile(
+      path.join(sessionDirectory, `rollout-${sessionId}.jsonl`),
+      JSON.stringify({
+        timestamp,
+        type: "session_meta",
+        payload: { session_id: sessionId, cwd, timestamp },
+      }) + "\n",
+      "utf8",
+    );
+    await fs.utimes(path.join(sessionDirectory, `rollout-${sessionId}.jsonl`), new Date(timestamp), new Date(timestamp));
+  };
+
+  const firstId = "71111111-2222-4333-8444-555555555555";
+  const pinnedId = "81111111-2222-4333-8444-555555555555";
+  await writeSession(firstId, firstProject, "2026-08-22T10:03:00.000Z");
+  await writeSession(pinnedId, pinnedProject, "2026-08-22T10:01:00.000Z");
+  await writeSession("newer-unpinned", pinnedProject, "2026-08-22T10:02:00.000Z");
+
+  const repository = new CodexSessionRepository(temporary, "en");
+  const index = await repository.scan({
+    includeArchived: true,
+    pinnedProjectPaths: [pinnedProject],
+    pinnedConversationIds: [pinnedId],
+  });
+
+  assert.equal(index.projects[0].path, pinnedProject);
+  assert.equal(index.projects[0].pinned, true);
+  assert.equal(index.projects[0].conversations[0].id, pinnedId);
+  assert.equal(index.projects[0].conversations[0].pinned, true);
+  assert.equal(index.projects[0].conversations[1].id, "newer-unpinned");
+  assert.equal(index.projects[1].conversations[0].id, firstId);
+  assert.equal(index.projects[1].conversations[0].pinned, false);
+});
+
+test("permanently deletes a conversation file and all files in a project", async t => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "codexchat-delete-test-"));
+  t.after(() => fs.rm(temporary, { recursive: true, force: true }));
+
+  const projectPath = path.join(temporary, "delete-project");
+  const sessionDirectory = path.join(temporary, "sessions", "2026", "08", "23");
+  await fs.mkdir(projectPath, { recursive: true });
+  await fs.mkdir(sessionDirectory, { recursive: true });
+  const firstId = "91111111-2222-4333-8444-555555555555";
+  const secondId = "a1111111-2222-4333-8444-555555555555";
+  const files = [firstId, secondId].map(id => path.join(sessionDirectory, `rollout-${id}.jsonl`));
+  for (const file of files) {
+    const id = path.basename(file).slice("rollout-".length, -".jsonl".length);
+    await fs.writeFile(file, JSON.stringify({
+      timestamp: "2026-08-23T10:00:00.000Z",
+      type: "session_meta",
+      payload: { session_id: id, cwd: projectPath, timestamp: "2026-08-23T10:00:00.000Z" },
+    }) + "\n", "utf8");
+  }
+
+  const repository = new CodexSessionRepository(temporary, "en");
+  const index = await repository.scan({ includeArchived: true });
+  const first = index.conversations.find(item => item.id === firstId);
+  assert.ok(first);
+
+  await repository.deleteConversation(first);
+  await assert.rejects(() => fs.stat(files[0]), { code: "ENOENT" });
+
+  const afterSingleDelete = await repository.scan({ includeArchived: true });
+  const project = afterSingleDelete.projects[0];
+  assert.ok(project);
+  await repository.deleteProject(project.path);
+  for (const file of files) {
+    await assert.rejects(() => fs.stat(file), { code: "ENOENT" });
+  }
+});
+
+test("conversation deletion removes duplicate archive files and rejects mismatched identities", async t => {
+  const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "codexchat-delete-identity-"));
+  t.after(() => fs.rm(temporary, { recursive: true, force: true }));
+  const project = path.join(temporary, "project");
+  await fs.mkdir(project);
+  await fs.mkdir(path.join(temporary, "sessions"));
+  await fs.mkdir(path.join(temporary, "archived_sessions"));
+  const record = JSON.stringify({ type: "session_meta", payload: { id: "duplicate", cwd: project } }) + "\n";
+  const active = path.join(temporary, "sessions", "active.jsonl");
+  const archived = path.join(temporary, "archived_sessions", "copy.jsonl");
+  await fs.writeFile(active, record);
+  await fs.writeFile(archived, record);
+  const repository = new CodexSessionRepository(temporary, "en");
+  const summary = (await repository.scan({ includeArchived: false })).conversations[0];
+  await assert.rejects(repository.deleteConversation({ ...summary, id: "wrong-id" }));
+  assert.equal(await fs.readFile(active, "utf8"), record);
+  const outside = path.join(temporary, "outside.jsonl");
+  await fs.writeFile(outside, record);
+  await assert.rejects(repository.deleteConversation({ ...summary, filePath: outside }));
+  assert.equal(await fs.readFile(outside, "utf8"), record);
+  const externalDirectory = path.join(temporary, "external");
+  await fs.mkdir(externalDirectory);
+  const externalFile = path.join(externalDirectory, "linked.jsonl");
+  await fs.writeFile(externalFile, record);
+  const link = path.join(temporary, "sessions", "link");
+  await fs.symlink(externalDirectory, link, process.platform === "win32" ? "junction" : "dir");
+  await assert.rejects(repository.deleteConversation({ ...summary, filePath: path.join(link, "linked.jsonl") }));
+  assert.equal(await fs.readFile(externalFile, "utf8"), record);
+  await repository.deleteConversation(summary);
+  await assert.rejects(fs.stat(active), { code: "ENOENT" });
+  await assert.rejects(fs.stat(archived), { code: "ENOENT" });
+  assert.equal(await fs.readFile(outside, "utf8"), record);
+});

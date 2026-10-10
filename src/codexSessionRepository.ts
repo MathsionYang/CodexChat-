@@ -14,7 +14,7 @@ import {
 } from "./models";
 import { formatDate, Locale, localize } from "./i18n";
 import { branchesEqual, readCurrentGitBranch } from "./gitUtils";
-import { normalizeProjectPath, projectIdForPath, projectNameForPath } from "./pathUtils";
+import { normalizeProjectPath, pathsEqual, projectIdForPath, projectNameForPath } from "./pathUtils";
 
 interface IndexedTitle {
   title: string;
@@ -29,9 +29,17 @@ interface ParsedSessionMeta {
   git?: ConversationGitSummary;
 }
 
-interface ScanOptions {
+export interface ScanOptions {
   includeArchived: boolean;
   customProjects?: CustomProject[];
+  pinnedProjectPaths?: string[];
+  pinnedConversationIds?: string[];
+}
+
+export interface SessionFileReference {
+  id: string;
+  projectPath: string;
+  filePath: string;
 }
 
 const MAX_DETAIL_ENTRIES = 2_000;
@@ -53,7 +61,10 @@ export class CodexSessionRepository {
 
     const homeExists = await pathExists(this.codexHome);
     if (!homeExists) {
-      const projects = await this.createCustomProjects(options.customProjects ?? []);
+      const projects = await this.createCustomProjects(
+        options.customProjects ?? [],
+        new Set((options.pinnedProjectPaths ?? []).map(projectPath => normalizeProjectPath(projectPath))),
+      );
       return {
         projects,
         conversations: [],
@@ -75,13 +86,23 @@ export class CodexSessionRepository {
       : [];
 
     const byId = new Map<string, ConversationSummary>();
+    const pinnedConversationIds = new Set(options.pinnedConversationIds ?? []);
+    const pinnedProjectPaths = new Set(
+      (options.pinnedProjectPaths ?? []).map(projectPath => normalizeProjectPath(projectPath)),
+    );
     const gitBranchByProjectPath = new Map<string, Promise<string | undefined>>();
     for (const item of [
       ...activeFiles.map(filePath => ({ filePath, archived: false })),
       ...archivedFiles.map(filePath => ({ filePath, archived: true })),
     ]) {
       try {
-        const summary = await this.readSummary(item.filePath, item.archived, titles, gitBranchByProjectPath);
+        const summary = await this.readSummary(
+          item.filePath,
+          item.archived,
+          titles,
+          gitBranchByProjectPath,
+          pinnedConversationIds,
+        );
         if (!summary) {
           failedFileCount += 1;
           continue;
@@ -101,8 +122,12 @@ export class CodexSessionRepository {
     }
 
     const conversations = (await filterExistingProjectConversations([...byId.values()]))
-      .sort(compareConversationUpdatedDescending);
-    const projects = await this.buildProjects(conversations, options.customProjects ?? []);
+      .sort(compareConversationOrder);
+    const projects = await this.buildProjects(
+      conversations,
+      options.customProjects ?? [],
+      pinnedProjectPaths,
+    );
     return {
       projects,
       conversations,
@@ -165,6 +190,75 @@ export class CodexSessionRepository {
     };
   }
 
+  public async deleteConversation(
+    summary: ConversationSummary,
+    onDeleted?: (id: string, complete: boolean) => void,
+  ): Promise<void> {
+    await this.validateSessionFile(summary);
+    const files = (await this.listProjectSessionFiles(summary.projectPath)).filter(file => file.id === summary.id);
+    await this.deleteProject(summary.projectPath, files, onDeleted);
+  }
+
+  public async listProjectSessionFiles(projectPath: string): Promise<SessionFileReference[]> {
+    const [active, archived] = await Promise.all([
+      collectJsonlFiles(path.join(this.codexHome, "sessions"), true),
+      collectJsonlFiles(path.join(this.codexHome, "archived_sessions"), true),
+    ]);
+    const result: SessionFileReference[] = [];
+    for (const filePath of [...active, ...archived]) {
+      try {
+        const meta = await readSessionMeta(filePath);
+        if (meta?.cwd && pathsEqual(meta.cwd, projectPath)) {
+          result.push({ id: meta.id, projectPath: path.resolve(meta.cwd), filePath });
+        }
+      } catch (error) {
+        if (!isNodeError(error) || error.code !== "ENOENT") throw error;
+      }
+    }
+    return result;
+  }
+
+  public async deleteProject(
+    projectPath: string,
+    files?: SessionFileReference[],
+    onDeleted?: (id: string, complete: boolean) => void,
+  ): Promise<void> {
+    const targets = files ?? await this.listProjectSessionFiles(projectPath);
+    for (const file of targets) {
+      if (!pathsEqual(file.projectPath, projectPath)) throw new Error("Session belongs to another project.");
+      if (!(await this.validateSessionFile(file))) throw new Error("Session files changed. Refresh and confirm again.");
+    }
+    const remaining = new Map<string, number>();
+    targets.forEach(file => remaining.set(file.id, (remaining.get(file.id) ?? 0) + 1));
+    for (const file of targets) {
+      if (!(await this.validateSessionFile(file))) throw new Error("Session files changed. Refresh and confirm again.");
+      await fsPromises.unlink(file.filePath);
+      const count = (remaining.get(file.id) ?? 1) - 1;
+      remaining.set(file.id, count);
+      onDeleted?.(file.id, count === 0);
+    }
+  }
+
+  private async validateSessionFile(file: SessionFileReference): Promise<boolean> {
+    assertManagedSessionFile(file.filePath, this.codexHome);
+    try {
+      const stat = await fsPromises.lstat(file.filePath);
+      const [home, actual] = await Promise.all([
+        fsPromises.realpath(this.codexHome), fsPromises.realpath(file.filePath),
+      ]);
+      assertManagedSessionFile(actual, home);
+      if (!stat.isFile() || stat.isSymbolicLink()) throw new Error("Session file is not a regular file.");
+      const meta = await readSessionMeta(file.filePath);
+      if (meta?.id !== file.id || !pathsEqual(meta.cwd, file.projectPath)) {
+        throw new Error("Session identity changed. Refresh before deleting.");
+      }
+      return true;
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== "ENOENT") throw error;
+      return false;
+    }
+  }
+
   private async readSessionIndex(warnings: string[]): Promise<Map<string, IndexedTitle>> {
     const indexPath = path.join(this.codexHome, "session_index.jsonl");
     const indexed = new Map<string, IndexedTitle>();
@@ -212,6 +306,7 @@ export class CodexSessionRepository {
     archived: boolean,
     titles: Map<string, IndexedTitle>,
     gitBranchByProjectPath: Map<string, Promise<string | undefined>>,
+    pinnedConversationIds: Set<string>,
   ): Promise<ConversationSummary | undefined> {
     const meta = await readSessionMeta(filePath);
     if (!meta?.id) {
@@ -243,12 +338,14 @@ export class CodexSessionRepository {
       sourceVersion: meta.sourceVersion,
       git,
       tokenUsage,
+      pinned: pinnedConversationIds.has(meta.id),
     };
   }
 
   private async buildProjects(
     conversations: ConversationSummary[],
     customProjects: CustomProject[],
+    pinnedProjectPaths: Set<string>,
   ): Promise<ProjectSummary[]> {
     const projects = new Map<string, ProjectSummary>();
     for (const conversation of conversations) {
@@ -273,6 +370,7 @@ export class CodexSessionRepository {
         lastConversationAt: conversation.updatedAt,
         pathExists: true,
         custom: false,
+        pinned: pinnedProjectPaths.has(normalizeProjectPath(projectPath)),
         conversations: [conversation],
       });
     }
@@ -298,16 +396,20 @@ export class CodexSessionRepository {
         lastConversationAt: custom.addedAt,
         pathExists: true,
         custom: true,
+        pinned: pinnedProjectPaths.has(normalized),
         conversations: [],
       });
     }
 
     return [...projects.values()]
-      .map(project => ({ ...project, conversations: project.conversations.sort(compareConversationUpdatedDescending) }))
-      .sort((first, second) => compareDates(second.lastConversationAt, first.lastConversationAt));
+      .map(project => ({ ...project, conversations: project.conversations.sort(compareConversationOrder) }))
+      .sort(compareProjectOrder);
   }
 
-  private async createCustomProjects(customProjects: CustomProject[]): Promise<ProjectSummary[]> {
+  private async createCustomProjects(
+    customProjects: CustomProject[],
+    pinnedProjectPaths: Set<string>,
+  ): Promise<ProjectSummary[]> {
     const projects: ProjectSummary[] = [];
     for (const custom of customProjects) {
       const normalized = normalizeProjectPath(custom.path);
@@ -323,11 +425,36 @@ export class CodexSessionRepository {
         lastConversationAt: custom.addedAt,
         pathExists: true,
         custom: true,
+        pinned: pinnedProjectPaths.has(normalized),
         conversations: [],
       });
     }
-    return projects;
+    return projects.sort(compareProjectOrder);
   }
+}
+
+function compareProjectOrder(first: ProjectSummary, second: ProjectSummary): number {
+  if (first.pinned !== second.pinned) {
+    return first.pinned ? -1 : 1;
+  }
+  return compareDates(second.lastConversationAt, first.lastConversationAt);
+}
+
+function assertManagedSessionFile(filePath: string, codexHome: string): void {
+  const resolvedFile = path.resolve(filePath);
+  const roots = [path.join(codexHome, "sessions"), path.join(codexHome, "archived_sessions")]
+    .map(root => path.resolve(root));
+  const managed = roots.some(root => {
+    const relative = path.relative(root, resolvedFile);
+    return relative && !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
+  });
+  if (!managed || !resolvedFile.toLowerCase().endsWith(".jsonl")) {
+    throw new Error("Refusing to delete a session outside the Codex sessions directory.");
+  }
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 async function filterExistingProjectConversations(
@@ -351,8 +478,8 @@ async function filterExistingProjectConversations(
   return visible;
 }
 
-async function collectJsonlFiles(directory: string): Promise<string[]> {
-  if (!(await pathExists(directory))) {
+async function collectJsonlFiles(directory: string, strict = false): Promise<string[]> {
+  if (!strict && !(await pathExists(directory))) {
     return [];
   }
 
@@ -366,7 +493,8 @@ async function collectJsonlFiles(directory: string): Promise<string[]> {
     let entries: fs.Dirent[];
     try {
       entries = await fsPromises.readdir(current, { withFileTypes: true });
-    } catch {
+    } catch (error) {
+      if (strict && (!isNodeError(error) || error.code !== "ENOENT")) throw error;
       continue;
     }
     for (const entry of entries) {
@@ -659,7 +787,10 @@ function shouldReplaceSummary(existing: ConversationSummary, candidate: Conversa
   return compareDates(candidate.fileModifiedAt, existing.fileModifiedAt) > 0;
 }
 
-function compareConversationUpdatedDescending(first: ConversationSummary, second: ConversationSummary): number {
+function compareConversationOrder(first: ConversationSummary, second: ConversationSummary): number {
+  if (first.pinned !== second.pinned) {
+    return first.pinned ? -1 : 1;
+  }
   return compareDates(second.updatedAt, first.updatedAt);
 }
 

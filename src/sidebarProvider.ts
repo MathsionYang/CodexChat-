@@ -84,45 +84,75 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
     if (!isMessage(message)) {
       return;
     }
-    switch (message.type) {
-      case "ready":
-        await this.postState();
-        break;
-      case "refresh":
-        this.loading = true;
-        await this.postState();
-        await this.sessions.refresh();
-        break;
-      case "chooseFolder":
-        await this.selectProjectFolder();
-        break;
-      case "selectProject":
-        if (typeof message.projectPath === "string") {
-          await this.setSelectedProject(message.projectPath);
-        }
-        break;
-      case "showProjects":
-        await this.setSelectedProject(undefined);
-        break;
-      case "openConversation":
-        if (typeof message.sessionId === "string") {
-          await this.openConversation(message.sessionId);
-        }
-        break;
-      case "openCodex":
-        await this.openSelectedProjectInCodex(message.mode === "new" ? "new" : "open");
-        break;
-      case "resumeConversation":
-        if (typeof message.sessionId === "string") {
-          await this.resumeConversation(message.sessionId);
-        }
-        break;
-      case "openSettings":
-        await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:local.codexchat");
-        break;
-      case "showDiagnostic":
-        await this.showDiagnostic();
-        break;
+    try {
+      switch (message.type) {
+        case "ready":
+          await this.postState();
+          break;
+        case "refresh":
+          this.loading = true;
+          await this.postState();
+          await this.sessions.refresh();
+          break;
+        case "chooseFolder":
+          await this.selectProjectFolder();
+          break;
+        case "selectProject":
+          if (typeof message.projectPath === "string") {
+            await this.setSelectedProject(message.projectPath);
+          }
+          break;
+        case "showProjects":
+          await this.setSelectedProject(undefined);
+          break;
+        case "openConversation":
+          if (typeof message.sessionId === "string") {
+            await this.openConversation(message.sessionId);
+          }
+          break;
+        case "openCodex":
+          await this.openSelectedProjectInCodex(message.mode === "new" ? "new" : "open");
+          break;
+        case "resumeConversation":
+          if (typeof message.sessionId === "string") {
+            await this.resumeConversation(message.sessionId);
+          }
+          break;
+        case "toggleProjectPin":
+          if (typeof message.projectPath === "string") {
+            await this.sessions.toggleProjectPin(message.projectPath);
+            await this.postState();
+          }
+          break;
+        case "toggleConversationPin":
+          if (typeof message.sessionId === "string") {
+            await this.sessions.toggleConversationPin(message.sessionId);
+            await this.postState();
+          }
+          break;
+        case "deleteConversation":
+          if (typeof message.sessionId === "string") {
+            await this.deleteConversation(message.sessionId);
+          }
+          break;
+        case "deleteProject":
+          if (typeof message.projectPath === "string") {
+            await this.deleteProject(message.projectPath);
+          }
+          break;
+        case "openSettings":
+          await vscode.commands.executeCommand("workbench.action.openSettings", "@ext:local.codexchat");
+          break;
+        case "showDiagnostic":
+          await this.showDiagnostic();
+          break;
+      }
+    } catch (error) {
+      this.loading = false;
+      void vscode.window.showErrorMessage(localize(this.locale, "sidebar.actionError", {
+        message: toErrorMessage(error),
+      }));
+      await this.postState();
     }
   }
 
@@ -137,7 +167,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
         { location: vscode.ProgressLocation.Window, title: localize(this.locale, "sidebar.readingConversation") },
         () => this.sessions.repository.readConversation(summary),
       );
-      ConversationPanel.show(this.context, detail, this.handoff, this.locale);
+      ConversationPanel.show(this.context, detail, this.handoff, this.sessions, this.locale);
     } catch (error) {
       void vscode.window.showErrorMessage(localize(this.locale, "sidebar.readError", {
         message: toErrorMessage(error),
@@ -155,6 +185,44 @@ export class SidebarProvider implements vscode.WebviewViewProvider, vscode.Dispo
       return;
     }
     await this.handoff.resumeConversation(summary.projectPath, summary.id, summary.git?.branch);
+  }
+
+  private async deleteConversation(sessionId: string): Promise<void> {
+    const summary = this.findConversation(sessionId);
+    if (!summary) {
+      return;
+    }
+    const confirmLabel = localize(this.locale, "delete.confirmConversationButton");
+    const choice = await vscode.window.showWarningMessage(
+      localize(this.locale, "delete.confirmConversation", { title: summary.title }),
+      { modal: true },
+      confirmLabel,
+    );
+    if (choice !== confirmLabel) {
+      return;
+    }
+    await this.sessions.deleteConversation(summary);
+  }
+
+  private async deleteProject(projectPath: string): Promise<void> {
+    const project = this.sessions.index.projects.find(item => samePath(item.path, projectPath));
+    if (!project) {
+      return;
+    }
+    const files = await this.sessions.repository.listProjectSessionFiles(project.path);
+    const confirmLabel = localize(this.locale, "delete.confirmProjectButton");
+    const choice = await vscode.window.showWarningMessage(
+      localize(this.locale, "delete.confirmProject", { name: project.name, count: new Set(files.map(file => file.id)).size }),
+      { modal: true },
+      confirmLabel,
+    );
+    if (choice !== confirmLabel) {
+      return;
+    }
+    await this.sessions.deleteProject(project, files);
+    if (samePath(this.selectedProjectPath ?? "", project.path)) {
+      await this.setSelectedProject(undefined);
+    }
   }
 
   private findConversation(sessionId: string): ConversationSummary | undefined {
