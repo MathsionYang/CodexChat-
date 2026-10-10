@@ -1,7 +1,7 @@
 # CodexChat —— 你的 Codex 本地会话管家
 
 > 本地优先的 VS Code 伴生插件，帮你按项目整理、查看、置顶、删除、统计并继续 OpenAI Codex 的历史会话。
-> 当前版本：**0.1.9**｜本地安装包：[codexchat-0.1.9.vsix](codexchat-0.1.9.vsix)
+> 当前版本：**0.1.10**｜本地安装包：[codexchat-0.1.10.vsix](codexchat-0.1.10.vsix)
 
 
 
@@ -255,4 +255,8 @@ CodexChat 尽可能通过官方 OpenAI Codex 扩展注册的 VS Code 命令进�
 
 Token 数据来自会话文件中的使用记录，缺失记录不计入总量；该数字不是账户账单或全部历史消耗。永久删除只管理本地 JSONL 文件，不同步 Codex 桌面端数据库或云端历史。
 
-更多说明：[插件说明](doc/插件说明.md) · [功能发展分析](doc/CodexChat功能发展分析报告.md)。
+更多说明：[插件说明](https://github.com/MathsionYang/CodexChat-/blob/main/doc/插件说明.md) · [功能发展分析](https://github.com/MathsionYang/CodexChat-/blob/main/doc/CodexChat功能发展分析报告.md)。
+
+## 0.1.10 发布包兼容性修复
+
+安装包不再包含 `doc` 目录中的开发文档和原型，避免 Marketplace 上传时把不同中文文件名解析成相同问号路径。文档保留在源码仓库中，插件界面和中英文内容仍正常提供。

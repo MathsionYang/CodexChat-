@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.10
+
+- Exclude development documents and prototypes from the VSIX to avoid Marketplace filename collisions when Chinese archive paths are decoded incorrectly.
+- Keep documentation in the source repository and link to it from the README.
+
 ## 0.1.9
 
 - Add persistent project and conversation pins with immediate button highlighting.
