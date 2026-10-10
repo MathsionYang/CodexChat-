@@ -1,262 +1,157 @@
-# CodexChat —— 你的 Codex 本地会话管家
+# CodexChat — Your Local Codex Conversation Manager
 
-> 本地优先的 VS Code 伴生插件，帮你按项目整理、查看、置顶、删除、统计并继续 OpenAI Codex 的历史会话。
-> 当前版本：**0.1.10**｜本地安装包：[codexchat-0.1.10.vsix](codexchat-0.1.10.vsix)
+English | [简体中文](README.zh-CN.md)
 
+> A local-first VS Code companion for organizing, viewing, pinning, deleting, tracking, and resuming OpenAI Codex conversations by project.
+>
+> Current version: **0.1.10** · [VSIX package](codexchat-0.1.10.vsix)
 
+## Why CodexChat?
 
-***
+Codex stores local conversation records in its data directory, usually `~/.codex`. As you work across repositories, finding the right conversation and returning to its project can become difficult.
 
-## 一、它解决了什么问题
+| Problem | How CodexChat helps |
+| --- | --- |
+| Conversations from different projects are mixed together | Groups local conversations by their recorded project folder |
+| Finding a conversation's workspace takes manual effort | Shows the project path and opens the corresponding workspace |
+| Token usage lacks a project view | Aggregates reported usage by project |
+| Resuming an old conversation requires digging through files | Offers a resume action and a fallback that copies the conversation ID |
+| The current Git branch may differ from the conversation's branch | Shows branch status and asks for confirmation before continuing on a different branch |
 
-用 OpenAI Codex 编程的人都知道：Codex 把每一次会话都保存在本机 `.codex` 数据目录里。当你跨多个仓库、多个项目使用 Codex 一段时间后，会话历史会变得一团乱：
+Your conversation data stays on your computer. CodexChat provides local management and hands active work back to the OpenAI Codex extension.
 
+## Features
 
+### Browse conversations by project
 
-| 痛点                         | 后果                                       |
-| ------------------------- | ----------------------------------------- |
-| 不同项目的会话混在一起            | 想找某次对话，只能一条条翻                         |
-| 无法按工作区定位历史             | 项目与对话对不上号，检索成本高                      |
-| Token 消耗没有项目维度统计       | 不知道每个项目烧了多少额度                         |
-| 续接历史会话全靠手动挖            | 找到记录难，恢复旧会话更难                         |
-| 会话与 Git 分支没有关联记录       | 恢复时可能在错误分支上继续，上下文错位                 |
+- Scans local `sessions` and, when enabled, `archived_sessions` records.
+- Reads `session_index.jsonl` when available to display conversation titles.
+- Groups conversations using the `cwd` recorded in each session.
+- Displays projects whose folders currently exist on disk.
+- Lets you add a project folder manually, including folders with no conversations yet.
+- Watches local session files and refreshes the index when they change.
 
-**CodexChat 就是为解决这些问题而生的**：它把散落的 Codex 本地会话按项目自动归类，提供只读的会话浏览、Token 用量统计，并支持一键交回 Codex 继续未完成的工作 —— 而你的数据始终留在本地。
+### Read-only conversation viewer
 
+- Opens recognized user messages, Codex replies, and tool call summaries in a VS Code panel.
+- Keeps the detail header and action buttons visible while scrolling.
+- Tolerates malformed JSONL lines and files that are still being written.
+- Limits very large conversations to the first 2,000 displayed records.
+- Provides actions to copy the conversation ID and reveal the original session file.
 
+### Project token statistics
 
-***
+- Shows reported token totals by project and average usage for conversations with usage data.
+- Displays input, cached input, cache write input, output, and reasoning output values where available.
+- Excludes conversations whose project folders no longer exist.
+- Keeps a summary bar at the bottom of the sidebar, outside the scrolling list.
 
-## 二、核心功能
+The project overview shows token usage across all indexed projects and the total project count. Inside a project, the token total applies to that project, while the project count remains global. Search filters do not change these totals; the archived-session setting changes the indexed scope.
 
-### 按项目浏览会话
+Usage comes from records in local session files. Missing usage records do not contribute to totals. These figures are not an account balance, billing statement, or complete history of all Codex usage.
 
+### Open and resume in Codex
 
+- Opens the corresponding project workspace before entering Codex.
+- Uses commands registered by the OpenAI Codex VS Code extension.
+- Tries to open a specific historical conversation through the local conversation route.
+- Falls back to opening the Codex sidebar and copying the conversation ID if direct restoration is unavailable.
+- Asks before switching workspaces by default; this can be changed in settings.
 
-* 自动扫描 `sessions` 和 `archived_sessions` 两处记录
+### Git branch checks
 
-* 有 `session_index.jsonl` 时自动读取，显示更准确的会话标题
+- Shows the Git branch recorded in a conversation when that information is available.
+- Compares it with the project's current branch before resuming.
+- Warns about a mismatch and asks whether to continue, so you can decide whether to switch branches first.
+- Supports filtering a project's conversations by the current branch when branch status is available.
 
-* 依据会话内记录的 `cwd` 自动归类到对应项目文件夹
+### Pin projects and conversations
 
-* 只展示磁盘上真实存在的项目路径，不显示残留垃圾项
+- Pins projects and conversations independently, placing pinned items before unpinned items.
+- Highlights the pin button immediately when clicked; unpinning restores its normal color.
+- Saves pin state in VS Code's global extension storage so it survives reloads.
+- Updates the list directly, preserving scroll position and search input without waiting for a full scan.
 
-* 支持手动添加项目文件夹（即使还没有会话）
+### Confirmed permanent deletion
 
-* 监听本地会话文件变化，**自动刷新**，无需手动重载
+- Deletes a conversation from its list or detail panel only after a modal confirmation.
+- Removes its local JSONL files, including archived copies with the same conversation ID, and clears its pin state.
+- Shows a project's conversation count, including hidden archived sessions, before confirming project data deletion.
+- Removes the confirmed project's recognized session files and local project metadata while keeping the actual project folder and source code.
+- Updates lists and statistics directly after deletion and prevents older scans from restoring deleted rows.
 
-### 只读会话查看器
+Permanent deletion cannot be undone. If new conversations are created for a deleted project later, the project can appear again. These operations manage local JSONL files; they do not synchronize deletion with Codex desktop databases or cloud history.
 
+### English and Simplified Chinese interface
 
+The extension includes both languages and follows VS Code's language setting. This README uses English by default; the [Chinese README](README.zh-CN.md) is available separately.
 
-* 在 VS Code 面板中只读查看本地 Codex 会话
+## Screenshots
 
-* 完整展示用户消息、Codex 回复与工具调用摘要
+### Project conversations
 
-* 浏览长会话时，顶部摘要与操作按钮**常驻可见**
+![Project conversations](<img/会话详情.png>)
 
-* 对正在写入或格式异常的 JSONL 行做容错处理，不崩溃
+### Git branch status
 
-* 超大对话自动截断至前 2,000 条记录，保持界面流畅
+![Git branch status](<img/分支显示.png>)
 
-* 一键复制会话 ID，方便随时引用
+### Resume a conversation
 
-### 项目 Token 统计
+![Resume a conversation](<img/会话恢复.png>)
 
+### Token statistics
 
+![Token statistics](<img/Token 统计.png>)
 
-* 按项目文件夹汇总 Codex token 用量
+## Privacy and local storage
 
-* 展示项目总 token 与每个会话平均消耗
+Conversation browsing and statistics read local Codex records. Pinning stores metadata in VS Code's extension storage. Permanent deletion requires confirmation and affects recognized session files within the managed session directories.
 
-* 数据可用时细分：input /cached input /cache write input /output/reasoning output
+CodexChat does not upload conversation content, provide cloud synchronization, or edit conversation text. Project data deletion preserves project folders, source code, and other Codex data files.
 
-* 已删除的项目路径不计入统计，数据干净可靠
+The data directory is resolved in this order: `codexChat.codexHome`, the `CODEX_HOME` environment variable, then the current user's `~/.codex` folder.
 
-### Codex 无缝交接
+## Quick start
 
+Requires **VS Code 1.96.2 or later**. Install the OpenAI Codex extension to use the open, new conversation, and resume actions.
 
+1. Search for **CodexChat** in the VS Code Marketplace, or run **Extensions: Install from VSIX...** and select `codexchat-0.1.10.vsix`.
+2. Open CodexChat from the Activity Bar.
+3. Choose a detected project, or use the folder button to add one.
+4. Click a conversation to view its local contents.
+5. Use the statistics button to explore project token usage.
+6. Select **Open Codex** to continue working in the selected project's Codex extension.
+7. Use **Resume in Codex** beside a conversation to resume its history.
 
-* 进入 Codex 前自动切换到对应项目工作区
+Use the pin and delete buttons to manage projects or conversations. Deletion always asks for confirmation.
 
-* 通过官方 VS Code 命令调用 OpenAI Codex 扩展
+## Settings
 
-* 在兼容版本中**直接恢复指定历史会话**，接上上次的进度
+| Setting | Default | Description |
+| --- | --- | --- |
+| `codexChat.codexHome` | `""` | Codex data directory. When empty, uses `CODEX_HOME`, then the current user's `.codex` folder. |
+| `codexChat.includeArchivedSessions` | `true` | Includes conversations from `archived_sessions` in lists and statistics. Project deletion always checks archived files. |
+| `codexChat.enableExperimentalSessionHandoff` | `true` | Allows attempts to restore a historical conversation through the local conversation route. |
+| `codexChat.confirmWorkspaceSwitch` | `true` | Asks before opening Codex in another project's workspace. |
 
-* 直接恢复不可用时自动降级：打开 Codex 侧栏并复制会话 ID，引用不丢失
+## Compatibility
 
-* 切换工作区前默认二次确认，防止误跳项目（可在设置中关闭）
+CodexChat uses `chatgpt.openSidebar` to open the OpenAI Codex extension's sidebar. Opening a specific historical conversation relies on the extension's internal `/local/:conversationId` route, whose availability may change between Codex versions. When direct restoration is unavailable, CodexChat opens the sidebar and copies the conversation ID.
 
-### Git 分支记忆与校验
+CodexChat is a companion manager. It does not implement a separate chat client or call model APIs itself.
 
+## Release notes
 
+**0.1.9** added persistent project and conversation pins, confirmed permanent deletion, immediate list updates, and fixed token/project summary bars.
 
-* 记录每个会话当时所在的 Git 分支状态
+**0.1.10** excludes development documents and prototypes under `doc` from the VSIX. This avoids Marketplace upload collisions when different Chinese filenames are decoded as the same question-mark path. Documentation remains in the source repository; runtime resources and both interface languages are preserved.
 
-* 恢复历史会话时，自动校验当前分支与会话记录的分支是否一致
+See the [changelog](CHANGELOG.md) for details.
 
-* 分支不一致时**提示先切换分支**，避免在错误分支上继续对话、造成上下文错位
+## Links
 
-### 中英文双语界面
-
-
-
-* 内置英文与简体中文两套文案
-
-* 自动跟随 VS Code 当前语言设置
-
-
-
-***
-
-## 三、界面预览
-
-### 项目会话列表
-
-
-
-![项目会话列表](<img/会话详情.png>)
-
-### 分支显示
-
-
-
-![分支显示](<img/分支显示.png>)
-
-### 会话恢复
-
-
-
-![会话恢复](<img/会话恢复.png>)
-
-### 会话详情（待补充）
-
-
-
-![会话详情](img/screenshot-conversation-detail.png)
-<!-- TODO: 替换为会话详情（对话内容查看）截图 -->
-
-### Token 统计
-
-
-
-![Token 统计](<img/Token 统计.png>)
-
-
-
-***
-
-## 四、隐私与安全：本地优先，删除必须确认
-
-CodexChat 把 "数据安全" 当作第一设计原则：
-
-
-
-* 只读取本机 `.codex` 记录，**不上传任何会话内容**
-
-* **不做云同步**，数据不出你的电脑
-
-* 浏览和统计只读取 Codex 原始会话文件；仅在用户确认永久删除后删除对应 JSONL 文件
-
-* 删除项目数据包含归档会话，保留项目实际目录、业务代码和 Codex 的其他数据文件
-
-* 仅使用会话中记录的 `cwd` 字段进行项目归类
-
-* 已删除或不存在的项目路径不会计入统计
-
-默认数据目录为 `~/.codex`，也可通过 `codexChat.codexHome` 设置自定义。
-
-**一句话：它只 "看"，不 "动"，更不 "传"。**
-
-
-
-***
-
-## 五、快速上手
-
-
-
-1. 在 VS Code 应用商店搜索 **"CodexChat"** 并安装
-
-2. 从左侧 Activity Bar 打开 CodexChat 视图
-
-3. 选择自动识别的项目，或点击文件夹按钮手动添加
-
-4. 点击任意会话，只读查看本地内容
-
-5. 点击统计按钮，查看按项目汇总的 Token 用量
-
-6. 点击 **进入 Codex**，进入所选项目的官方 Codex 扩展
-
-7. 点击会话旁的 **在 Codex 中继续**，接续历史会话
-
-
-
-***
-
-## 六、设置项一览
-
-
-
-| 设置项                                          | 默认值    | 说明                                |
-| -------------------------------------------- | ------ | --------------------------------- |
-| `codexChat.codexHome`                        | `""`   | Codex 数据目录，留空使用当前用户的 `.codex` 文件夹 |
-| `codexChat.includeArchivedSessions`          | `true` | 是否包含 `archived_sessions` 中的归档会话   |
-| `codexChat.enableExperimentalSessionHandoff` | `true` | 是否允许通过本地会话路由恢复历史会话                |
-| `codexChat.confirmWorkspaceSwitch`           | `true` | 打开其他项目 Codex 前是否确认切换工作区           |
-
-
-
-***
-
-## 七、兼容性
-
-CodexChat 尽可能通过官方 OpenAI Codex 扩展注册的 VS Code 命令进行集成：
-
-
-
-* 使用公开命令 `chatgpt.openSidebar` 打开 Codex 侧栏
-
-* 直接打开指定本地会话依赖兼容 Codex 版本的内部 `/local/:conversationId` 路由
-
-* 直接恢复不可用时自动降级为「打开侧栏 + 复制会话 ID」，保证引用不丢失
-
-
-
-***
-
-## 八、它不是什么（边界声明）
-
-
-
-* 不是一个新的聊天客户端
-
-* 不自己实现 Codex 模型接口
-
-* 不编辑或重写会话正文；永久删除操作必须经过确认
-
-* 不把本地会话内容发送到任何服务器
-
-
-
-***
-
-**开源地址**：[github.com/MathsionYang/CodexChat-](https://github.com/MathsionYang/CodexChat-)
-
-**安装方式**：VS Code 应用商店搜索 **"CodexChat"**，一键安装，立即开始整理你的 Codex 会话。
-
-## 新增管理能力（0.1.9）
-
-- **永久删除会话**：在会话列表或详情中点击删除，必须在模态窗口中确认。删除该会话的本地 JSONL 文件（包含同 ID 的归档副本）并清理置顶状态；操作不可撤销。
-- **删除项目数据**：确认窗口显示包含归档的会话总数，确认后删除已识别的本地会话文件，并移除项目记录和置顶状态。项目实际文件夹不会被删除；以后产生的新会话仍会显示该项目。
-- **项目与会话置顶**：分别置顶/取消置顶，置顶项排在列表前面。点击后按钮立即显示主题高亮颜色，取消后恢复；状态保存于 VS Code 全局状态，重启仍有效。
-- **即时刷新**：置顶和删除直接推送列表与统计变化，无需滚动或等待全量会话扫描。保留当前页面滚动位置和搜索输入，旧扫描不会覆盖新状态。
-- **固定汇总栏**：项目总览底部显示当前索引中全部项目的 Token 总量和项目数；进入项目后显示当前项目的 Token 总量和全部项目数。汇总栏独立于滚动列表，始终可见。搜索筛选不改变汇总口径；归档显示设置会影响统计范围。
-
-Token 数据来自会话文件中的使用记录，缺失记录不计入总量；该数字不是账户账单或全部历史消耗。永久删除只管理本地 JSONL 文件，不同步 Codex 桌面端数据库或云端历史。
-
-更多说明：[插件说明](https://github.com/MathsionYang/CodexChat-/blob/main/doc/插件说明.md) · [功能发展分析](https://github.com/MathsionYang/CodexChat-/blob/main/doc/CodexChat功能发展分析报告.md)。
-
-## 0.1.10 发布包兼容性修复
-
-安装包不再包含 `doc` 目录中的开发文档和原型，避免 Marketplace 上传时把不同中文文件名解析成相同问号路径。文档保留在源码仓库中，插件界面和中英文内容仍正常提供。
+- [Source repository](https://github.com/MathsionYang/CodexChat-)
+- [Chinese README](README.zh-CN.md)
+- [Plugin guide (Chinese)](https://github.com/MathsionYang/CodexChat-/blob/main/doc/插件说明.md)
+- [Feature development analysis (Chinese)](https://github.com/MathsionYang/CodexChat-/blob/main/doc/CodexChat功能发展分析报告.md)
